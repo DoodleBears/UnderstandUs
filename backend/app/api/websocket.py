@@ -1,6 +1,7 @@
 from app.core.connection_manager import manager
 from app.services.audio_processor import audio_processor
 from app.services.room_service import room_service
+from app.websocket.signaling import signaling_handler
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import json
 import asyncio
@@ -42,6 +43,11 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str):
         # 启动心跳检查任务
         heartbeat_task = asyncio.create_task(check_heartbeat(websocket, last_heartbeat))
 
+        # 启动 WebRTC 信令处理任务
+        signaling_task = asyncio.create_task(
+            signaling_handler.handle_connection(websocket, room_id, user_id)
+        )
+
         try:
             while True:
                 # 接收消息
@@ -69,6 +75,9 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str):
                 elif message.get('type') == 'leave_room':
                     await manager.disconnect(websocket, room_id, user_id)
                     break
+                elif message.get('type') in ['offer', 'answer', 'ice-candidate']:
+                    # WebRTC 信令消息由 signaling_handler 处理
+                    continue
                 elif message.get('type') == 'audio_data':
                     # 处理音频数据
                     audio_data = message.get('payload', {}).get('data')
@@ -79,12 +88,15 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str):
         except WebSocketDisconnect:
             await manager.disconnect(websocket, room_id, user_id)
         finally:
-            # 取消心跳检查任务
+            # 取消所有任务
             heartbeat_task.cancel()
+            signaling_task.cancel()
             try:
                 await heartbeat_task
+                await signaling_task
             except asyncio.CancelledError:
                 pass
+
     except Exception as e:
         print(f"WebSocket error: {e}")
         try:

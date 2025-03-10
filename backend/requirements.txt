@@ -1,14 +1,28 @@
-fastapi==0.110.0
-uvicorn==0.27.1
-python-dotenv==1.0.1
-websockets==12.0
-openai==1.12.0
-python-multipart==0.0.9
-pydantic==2.6.3
-pydantic-settings==2.2.1
-requests==2.31.0
-torch==2.2.1
-torchaudio==2.2.1
-numpy==1.26.4
-sounddevice==0.4.6
-soundfile==0.12.1
+# FastAPI
+fastapi
+uvicorn
+
+# 环境变量
+python-dotenv
+
+# 网络
+websockets
+
+# 大模型
+openai
+
+# 文件上传
+python-multipart
+pydantic
+pydantic-settings
+requests
+
+# 音频处理
+torch
+torchaudio
+numpy
+sounddevice
+soundfile
+
+# WebRTC
+aiortc

@@ -1,0 +1,37 @@
+[project]
+name = "understand-us-backend"
+version = "0.1.0"
+description = "UnderstandUs Backend Service"
+authors = [
+    {name = "DoodleBear"}
+]
+readme = "README.md"
+requires-python = "^3.11"
+dependencies = [
+    "fastapi (>=0.115.11,<0.116.0)",
+    "uvicorn (>=0.34.0,<0.35.0)",
+    "python-dotenv (>=1.0.1,<2.0.0)",
+    "websockets (>=15.0.1,<16.0.0)",
+    "openai (>=1.65.5,<2.0.0)",
+    "python-multipart (>=0.0.20,<0.0.21)",
+    "pydantic (>=2.10.6,<3.0.0)",
+    "pydantic-settings (>=2.8.1,<3.0.0)",
+    "requests (>=2.32.3,<3.0.0)",
+    "torch (>=2.6.0,<3.0.0)",
+    "torchaudio (>=2.6.0,<3.0.0)",
+    "numpy (>=2.2.3,<3.0.0)",
+    "sounddevice (>=0.5.1,<0.6.0)",
+    "soundfile (>=0.13.1,<0.14.0)",
+    "aiortc (>=1.10.1,<2.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.5"
+pytest-asyncio = "^0.25.3"
+pytest-mock = "^3.14.0"
+
