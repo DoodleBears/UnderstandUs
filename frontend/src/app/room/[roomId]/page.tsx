@@ -1,5 +1,10 @@
 'use client'
 
+import { AudioControl } from '@/components/audio/AudioControl'
+import { AudioProvider } from '@/components/audio/AudioProvider'
+import { AudioStatus } from '@/components/audio/AudioStatus'
+import { useAudio } from '@/components/audio/useAudio'
+import { useWebRTC, WebRTCProvider } from '@/components/webrtc/WebRTCProvider'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { toast, Toaster } from 'react-hot-toast'
@@ -18,6 +23,19 @@ interface Transcript {
 
 export default function RoomPage() {
   const { roomId } = useParams()
+
+  // Wrap the actual content in providers
+  return (
+    <AudioProvider>
+      <WebRTCProvider signalingUrl={`ws://127.0.0.1:8000/api/ws/rtc/${roomId}`}>
+        <RoomContent />
+      </WebRTCProvider>
+    </AudioProvider>
+  )
+}
+
+function RoomContent() {
+  const { roomId } = useParams()
   const router = useRouter()
   const [participants, setParticipants] = useState<Participant[]>([])
   const [transcripts, setTranscripts] = useState<Transcript[]>([])
@@ -26,6 +44,20 @@ export default function RoomPage() {
   const wsRef = useRef<WebSocket | null>(null)
   const heartbeatIntervalRef = useRef<NodeJS.Timeout | undefined>(undefined)
   const lastHeartbeatRef = useRef<number>(Date.now())
+
+  const audio = useAudio()
+  const webrtc = useWebRTC()
+
+  // Connect to WebRTC when audio is ready
+  useEffect(() => {
+    if (audio.isReady && audio.state.stream && roomId) {
+      webrtc.actions.connect(
+        roomId as string,
+        'user-' + Math.random().toString(36).substr(2, 9)
+      )
+      webrtc.actions.setLocalStream(audio.state.stream)
+    }
+  }, [audio.isReady, audio.state.stream, roomId])
 
   // Add effect to log isConnected changes
   useEffect(() => {
@@ -142,6 +174,9 @@ export default function RoomPage() {
   }
 
   const leaveRoom = () => {
+    // Disconnect WebRTC
+    webrtc.actions.disconnect()
+
     // 检查是否是最后一个用户
     if (participants.length === 1) {
       setShowDeleteModal(true)
@@ -201,6 +236,15 @@ export default function RoomPage() {
         </div>
       </div>
 
+      {/* Audio Controls */}
+      <div className="mb-4 rounded-lg bg-white p-4 shadow">
+        <h2 className="mb-2 text-xl font-semibold">Audio Controls</h2>
+        <div className="flex flex-col gap-4">
+          <AudioControl showDeviceSelector showVolumeControl />
+          <AudioStatus showDeviceInfo showMetrics />
+        </div>
+      </div>
+
       {/* Delete Room Modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
@@ -241,6 +285,11 @@ export default function RoomPage() {
               <li key={participant.id} className="flex items-center gap-2">
                 <div className="h-2 w-2 rounded-full bg-green-500" />
                 {participant.name}
+                {webrtc.state.peers.has(participant.id) && (
+                  <span className="ml-2 text-xs text-green-500">
+                    (Audio Connected)
+                  </span>
+                )}
               </li>
             ))}
           </ul>

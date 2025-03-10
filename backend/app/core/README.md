@@ -1,68 +1,108 @@
 # Core 模块
 
-本模块包含核心功能组件，负责应用的基础设施和共享功能。
+核心模块包含应用程序的基础设施和核心功能组件。
 
-## 功能概述
-
-### 配置管理 (`config.py`)
-
-- 使用 pydantic-settings 进行配置管理
-- 支持环境变量和 .env 文件
-- 配置项包括：
-  - 服务器配置（主机、端口、环境）
-  - OpenAI API 配置
-  - ElevenLabs API 配置
-
-### 连接管理器 (`connection_manager.py`)
-
-- 管理 WebSocket 连接和房间
-- 功能：
-  1. 房间管理
-     - 创建/获取房间
-     - 自动清理空房间
-  2. 连接管理
-     - 处理用户连接/断开
-     - 维护用户-房间映射
-  3. 消息广播
-     - 房间内消息广播
-     - 转录文本的实时分发
-- 数据结构：
-  ```python
-  Room:
-    - room_id: str
-    - connections: Set[WebSocket]
-    - transcripts: Dict[str, List[str]]  # 用户ID -> 转录记录
-  ```
-
-## 实现细节
-
-### 房间生命周期
+## 文件结构
 
 ```
-创建房间 -> 用户加入 -> 消息广播 -> 用户离开 -> 清理空房间
+core/
+├── config.py             # 应用配置管理
+├── connection_manager.py # WebSocket 连接管理器
+└── __init__.py          # 模块初始化
 ```
 
-### 消息格式
+## 功能说明
 
-```json
-{
-  "type": "transcript",
-  "user_id": "用户ID",
-  "text": "转录文本",
-  "is_final": true/false,
-  "timestamp": "时间戳"
-}
-```
+### config.py
 
-## 使用示例
+应用程序配置管理，基于 pydantic-settings：
+
+- 服务器配置（主机、端口、环境等）
+- API 密钥配置（OpenAI、ElevenLabs 等）
+- 日志配置
+- 其他全局设置
+
+配置示例：
 
 ```python
-# 配置
 from app.core.config import settings
-print(f"Running in {settings.ENVIRONMENT} mode")
 
-# 连接管理
+# 使用配置
+host = settings.HOST
+port = settings.PORT
+openai_key = settings.OPENAI_API_KEY
+```
+
+### connection_manager.py
+
+WebSocket 连接管理器，负责：
+
+- 管理活跃的 WebSocket 连接
+- 房间内的消息广播
+- 连接状态监控
+- 自动清理断开的连接
+
+主要功能：
+
+1. 连接管理
+
+   - 添加新连接
+   - 移除断开的连接
+   - 获取房间内的所有连接
+
+2. 消息广播
+
+   - 向特定房间广播消息
+   - 向特定用户发送消息
+   - 处理不同类型的消息（文本、音频、系统消息等）
+
+3. 状态监控
+   - 连接健康检查
+   - 自动清理超时连接
+   - 房间状态维护
+
+使用示例：
+
+```python
 from app.core.connection_manager import manager
-await manager.connect(websocket, "room123", "user456")
-await manager.broadcast_transcript("room123", "user456", "Hello", True)
+
+# 添加连接
+await manager.connect(websocket, room_id, client_id)
+
+# 广播消息
+await manager.broadcast(room_id, message)
+
+# 断开连接
+await manager.disconnect(websocket)
+```
+
+## 错误处理
+
+核心模块定义了自定义异常类：
+
+- `ConnectionError` - 连接相关错误
+- `ConfigurationError` - 配置相关错误
+- `BroadcastError` - 消息广播错误
+
+错误处理示例：
+
+```python
+try:
+    await manager.broadcast(room_id, message)
+except BroadcastError as e:
+    logger.error(f"广播失败: {str(e)}")
+    # 处理错误...
+```
+
+## 依赖注入
+
+核心模块提供了依赖注入支持，可以在 FastAPI 路由中使用：
+
+```python
+from fastapi import Depends
+from app.core.config import get_settings
+
+@app.get("/config")
+async def get_config(settings = Depends(get_settings)):
+    return {"environment": settings.ENVIRONMENT}
 ```

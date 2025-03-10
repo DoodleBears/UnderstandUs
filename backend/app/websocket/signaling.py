@@ -3,6 +3,14 @@ from typing import Dict, Optional
 from aiortc import RTCIceCandidate, RTCPeerConnection, RTCSessionDescription
 from fastapi import WebSocket
 
+from app.monitoring.metrics import metrics_collector
+
+
+def validate_sdp(sdp: str) -> bool:
+    """Validate SDP format"""
+    required_fields = ["v=0", "o=", "s=", "t="]
+    lines = sdp.split("\n")
+    return all(any(line.startswith(field) for line in lines) for field in required_fields)
 
 class SignalingConnection:
     def __init__(self, websocket: WebSocket, room_id: str, user_id: str):
@@ -10,8 +18,118 @@ class SignalingConnection:
         self.room_id = room_id
         self.user_id = user_id
         self.peer_connection: Optional[RTCPeerConnection] = None
+        self.is_connected = False
+        
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.close()
+
+    async def connect(self):
+        """Connect to the signaling server"""
+        if not self.is_connected:
+            await self.websocket.send_json({
+                "type": "join",
+                "data": {
+                    "room_id": self.room_id,
+                    "user_id": self.user_id
+                }
+            })
+            self.is_connected = True
+            # Update connection metrics
+            current_metrics = metrics_collector.get_connection_metrics(1)[0] if metrics_collector._connection_history else None
+            room_connections = current_metrics.connections_per_room if current_metrics else {}
+            room_count = room_connections.get(self.room_id, 0) + 1
+            metrics_collector.record_connection_metrics(
+                total=current_metrics.total_connections + 1 if current_metrics else 1,
+                per_room={**room_connections, self.room_id: room_count}
+            )
+
+    async def disconnect(self):
+        """Disconnect from the signaling server"""
+        if self.is_connected:
+            await self.websocket.send_json({
+                "type": "leave",
+                "data": {
+                    "room_id": self.room_id,
+                    "user_id": self.user_id
+                }
+            })
+            self.is_connected = False
+            # Update connection metrics
+            current_metrics = metrics_collector.get_connection_metrics(1)[0] if metrics_collector._connection_history else None
+            if current_metrics:
+                room_connections = current_metrics.connections_per_room
+                room_count = room_connections.get(self.room_id, 1) - 1
+                if room_count > 0:
+                    metrics_collector.record_connection_metrics(
+                        total=current_metrics.total_connections - 1,
+                        per_room={**room_connections, self.room_id: room_count}
+                    )
+                else:
+                    room_connections = {k: v for k, v in room_connections.items() if k != self.room_id}
+                    metrics_collector.record_connection_metrics(
+                        total=current_metrics.total_connections - 1,
+                        per_room=room_connections
+                    )
+
+    async def send_offer(self, offer: dict, target_user_id: str):
+        """Send an offer to a specific user"""
+        if not self.is_connected:
+            raise Exception("Not connected to signaling server")
+        
+        # Validate SDP format
+        if not validate_sdp(offer["sdp"]):
+            raise Exception("Invalid SDP format")
+            
+        await self.websocket.send_json({
+            "type": "offer",
+            "data": {
+                "sdp": offer["sdp"],
+                "target_user_id": target_user_id
+            }
+        })
+
+    async def send_answer(self, answer: dict, target_user_id: str):
+        """Send an answer to a specific user"""
+        if not self.is_connected:
+            raise Exception("Not connected to signaling server")
+            
+        # Validate SDP format
+        if not validate_sdp(answer["sdp"]):
+            raise Exception("Invalid SDP format")
+            
+        await self.websocket.send_json({
+            "type": "answer",
+            "data": {
+                "sdp": answer["sdp"],
+                "target_user_id": target_user_id
+            }
+        })
+
+    async def send_ice_candidate(self, candidate: dict, target_user_id: str):
+        """Send an ICE candidate to a specific user"""
+        if not self.is_connected:
+            raise Exception("Not connected to signaling server")
+            
+        required_fields = ["candidate", "sdpMLineIndex", "sdpMid"]
+        if not all(field in candidate for field in required_fields):
+            raise Exception("Invalid ICE candidate format")
+            
+        await self.websocket.send_json({
+            "type": "ice-candidate",
+            "data": {
+                "candidate": candidate["candidate"],
+                "sdpMLineIndex": candidate["sdpMLineIndex"],
+                "sdpMid": candidate["sdpMid"],
+                "target_user_id": target_user_id
+            }
+        })
         
     async def close(self):
+        """Close the connection and cleanup resources"""
+        await self.disconnect()
         if self.peer_connection:
             await self.peer_connection.close()
             self.peer_connection = None

@@ -26,3 +26,6 @@ soundfile
 
 # WebRTC
 aiortc
+
+# 性能监控
+psutil

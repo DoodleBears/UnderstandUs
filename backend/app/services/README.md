@@ -1,89 +1,151 @@
 # Services 模块
 
-本模块包含各种业务服务的实现，负责处理具体的业务逻辑。
+服务层模块包含所有业务逻辑处理服务。
 
-## 功能概述
-
-### 音频处理服务 (`audio_processor.py`)
-
-- 实时音频流处理和语音检测
-- 功能：
-  1. 音频缓冲管理
-     - 维护固定大小的音频缓冲区
-     - 自动处理溢出数据
-  2. 语音活动检测 (VAD)
-     - 使用 Silero VAD 模型
-     - 精确检测语音片段
-     - 自动分割连续语音
-  3. 音频片段处理
-     - 提取有效语音片段
-     - 转换音频格式
-     - 生成文本转录
-- 参数配置：
-
-  ```python
-  AudioBuffer:
-    - max_duration: 30.0  # 最大缓冲时长（秒）
-    - sample_rate: 16000  # 采样率
-
-  VAD 配置:
-    - min_speech_duration_ms: 500  # 最小语音持续时间
-    - min_silence_duration_ms: 500  # 最小静音持续时间
-    - window_size_samples: 512      # 检测窗口大小
-  ```
-
-### 语音转文字服务 (`speech_to_text.py`)
-
-- 使用 ElevenLabs API 进行语音转文字
-- 功能：
-  1. 音频转换
-     - 支持多种音频格式
-     - 自动处理采样率
-  2. 文本生成
-     - 实时转录
-     - 标点符号检测
-     - 句子完整性判断
-
-## 实现细节
-
-### 音频处理流程
+## 文件结构
 
 ```
-原始音频 -> 缓冲区 -> VAD 检测 -> 提取语音片段 -> 转录文本
+services/
+├── audio_processor.py  # 音频处理服务
+├── room_service.py     # 房间管理服务
+├── speech_to_text.py   # 语音转文本服务
+└── __init__.py        # 模块初始化
 ```
 
-### 语音检测算法
+## 功能说明
 
-1. 使用 Silero VAD 进行语音活动检测
-2. 基于时间戳提取语音片段
-3. 合并临近的语音片段
-4. 过滤过短的语音片段
+### audio_processor.py
 
-### 错误处理
+音频处理服务，负责：
 
-- 音频格式错误处理
-- API 调用异常处理
-- 缓冲区溢出处理
+- 音频数据预处理
+- 实时音频流处理
+- 音频格式转换
+- 音频质量优化
 
-## 使用示例
+主要功能：
 
 ```python
-# 音频处理
-from app.services.audio_processor import audio_processor
+class AudioProcessor:
+    async def process_audio(self, audio_data: bytes) -> np.ndarray:
+        """处理原始音频数据"""
 
-# 处理音频块
-results = audio_processor.process_audio_chunk(audio_data)
-for text, is_final in results:
-    print(f"转录文本: {text} (完整句子: {is_final})")
+    async def optimize_audio(self, audio: np.ndarray) -> np.ndarray:
+        """优化音频质量"""
 
-# 语音转文字
-from app.services.speech_to_text import speech_to_text_service
-text = speech_to_text_service.convert_audio_to_text(audio_data)
+    async def segment_audio(self, audio: np.ndarray) -> List[np.ndarray]:
+        """音频分段"""
 ```
 
-## 性能考虑
+### room_service.py
 
-- 缓冲区大小限制：30秒
-- 最小语音片段：500ms
-- 最小静音间隔：500ms
-- 采样率：16kHz（Silero VAD 要求）
+房间管理服务，提供：
+
+- 房间的 CRUD 操作
+- 房间状态管理
+- 参与者管理
+- 房间数据持久化
+
+主要功能：
+
+```python
+class RoomService:
+    async def create_room(self, room_data: RoomCreate) -> Room:
+        """创建新房间"""
+
+    async def get_room(self, room_id: str) -> Room:
+        """获取房间信息"""
+
+    async def add_participant(self, room_id: str, user_id: str) -> None:
+        """添加参与者"""
+```
+
+### speech_to_text.py
+
+语音转文本服务，实现：
+
+- 实时语音识别
+- 多语言支持
+- 识别结果优化
+- 集成 OpenAI Whisper API
+
+主要功能：
+
+```python
+class SpeechToText:
+    async def transcribe(self, audio: np.ndarray) -> str:
+        """音频转文本"""
+
+    async def transcribe_stream(self, audio_stream: AsyncIterator[bytes]) -> AsyncIterator[str]:
+        """流式音频转文本"""
+```
+
+## 服务依赖关系
+
+```mermaid
+graph TD
+    A[WebSocket API] --> B[RoomService]
+    A --> C[AudioProcessor]
+    C --> D[SpeechToText]
+    D --> E[OpenAI API]
+    B --> F[数据持久化]
+```
+
+## 错误处理
+
+服务层定义了以下异常类：
+
+- `AudioProcessingError` - 音频处理错误
+- `RoomServiceError` - 房间管理错误
+- `TranscriptionError` - 转录错误
+
+错误处理示例：
+
+```python
+try:
+    audio_data = await audio_processor.process_audio(raw_audio)
+except AudioProcessingError as e:
+    logger.error(f"音频处理失败: {str(e)}")
+    # 错误处理逻辑
+```
+
+## 配置和依赖
+
+服务模块依赖：
+
+- OpenAI API
+- PyTorch
+- NumPy
+- SoundDevice
+- SoundFile
+
+配置示例：
+
+```python
+# 音频处理配置
+SAMPLE_RATE = 16000
+CHUNK_SIZE = 1024
+CHANNELS = 1
+
+# OpenAI 配置
+OPENAI_MODEL = "whisper-1"
+```
+
+## 性能优化
+
+服务层实现了以下优化：
+
+1. 异步处理
+
+   - 使用 `asyncio` 实现非阻塞操作
+   - 并发处理多个请求
+
+2. 缓存机制
+
+   - 房间信息缓存
+   - 音频处理结果缓存
+
+3. 资源管理
+   - 连接池
+   - 内存使用优化
+   - 定时清理机制

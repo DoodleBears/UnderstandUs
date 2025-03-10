@@ -1,42 +1,83 @@
 # API 模块
 
-本模块包含所有的 API 路由处理器，负责处理 HTTP 和 WebSocket 请求。
+该模块包含所有的 HTTP 和 WebSocket API 端点定义。
 
-## 功能概述
-
-### WebSocket 处理 (`websocket.py`)
-
-- 实时音频流处理
-  - 端点：`/ws/{room_id}/{user_id}`
-  - 功能：接收客户端的音频数据流，处理后广播转录文本
-  - 实现：
-    1. 建立 WebSocket 连接并加入指定房间
-    2. 接收二进制音频数据
-    3. 使用 AudioProcessor 处理音频数据
-    4. 通过 ConnectionManager 广播转录结果
-
-### 错误处理
-
-- 处理 WebSocket 断开连接
-- 处理音频处理异常
-- 自动清理断开的连接
-
-## 数据流
+## 文件结构
 
 ```
-客户端 -> WebSocket 连接 -> 音频处理 -> 文本转录 -> 广播结果
+api/
+├── rooms.py      # 房间管理相关的 API 端点
+└── websocket.py  # WebSocket 连接和实时通信的 API 端点
 ```
+
+## 功能说明
+
+### rooms.py
+
+房间管理 API，提供以下功能：
+
+- 创建新的对话房间
+- 获取房间列表
+- 获取特定房间信息
+- 加入/离开房间
+- 房间状态管理
+
+主要端点：
+
+- `POST /api/rooms` - 创建新房间
+- `GET /api/rooms` - 获取房间列表
+- `GET /api/rooms/{room_id}` - 获取特定房间信息
+
+### websocket.py
+
+WebSocket 通信 API，处理：
+
+- 实时音频数据传输
+- 用户连接管理
+- 房间内实时消息广播
+- 音频分析结果推送
+
+主要端点：
+
+- `WebSocket /api/ws/{room_id}/{client_id}` - WebSocket 连接端点
+- `WebSocket /api/signaling/{room_id}/{client_id}` - WebRTC 信令服务端点
 
 ## 使用示例
 
+### 创建房间
+
 ```python
-# 连接 WebSocket
-ws = await websocket_connect("ws://localhost:8000/ws/room123/user456")
+response = await client.post("/api/rooms", json={
+    "name": "测试房间",
+    "description": "这是一个测试房间"
+})
+```
 
-# 发送音频数据
-await ws.send_bytes(audio_data)
+### WebSocket 连接
 
-# 接收转录结果
-result = await ws.receive_text()
-# 结果格式: {"type": "transcript", "user_id": "...", "text": "...", "is_final": true/false}
+```python
+async with websockets.connect(f"ws://localhost:8000/api/ws/{room_id}/{client_id}") as websocket:
+    await websocket.send(json.dumps({
+        "type": "join",
+        "data": {"room_id": room_id}
+    }))
+```
+
+## 错误处理
+
+API 模块使用标准的 HTTP 状态码进行错误处理：
+
+- 400 - 请求参数错误
+- 404 - 资源不存在
+- 409 - 资源冲突
+- 500 - 服务器内部错误
+
+每个错误响应都包含详细的错误信息：
+
+```json
+{
+  "error": "错误类型",
+  "message": "详细错误信息",
+  "details": {}
+}
 ```
