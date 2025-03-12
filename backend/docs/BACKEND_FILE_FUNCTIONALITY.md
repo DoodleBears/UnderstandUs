@@ -5,30 +5,25 @@
 ```
 backend/app/
 ├── api/                           # API endpoints and routes
-│   ├── rooms.py                  # Room management endpoints
+│   ├── rooms.py                  # Room management and LiveKit token endpoints
 │   └── README.md                # API documentation
 │
 ├── core/                         # Core application components
-│   ├── config.py                # Application configuration
+│   ├── config.py                # Application configuration (LiveKit, WebSocket)
 │   └── README.md                # Core module documentation
 │
 ├── models/                       # Data models and schemas
-│   ├── room.py                  # Room data model
+│   ├── room.py                  # Room and participant data models
 │   └── README.md                # Models documentation
 │
-├── monitoring/                   # Application monitoring
-│   └── metrics.py               # Metrics collection and monitoring
-│
 ├── services/                     # Business logic services
-│   ├── audio_processor.py       # Audio processing service
-│   ├── event_broadcaster.py     # Event broadcasting service
-│   ├── room_audio.py           # Room audio management
-│   ├── room_service.py         # Room management service
-│   ├── speech_to_text.py       # Speech-to-text service
-│   └── README.md               # Services documentation
+│   ├── livekit_service.py       # LiveKit integration service
+│   ├── room_service.py          # Room management service
+│   ├── speech_to_text.py        # Speech-to-text service
+│   └── README.md                # Services documentation
 │
 ├── websocket/                    # WebSocket handling
-│   ├── socketio_server.py      # Socket.IO server implementation
+│   ├── ws_server.py            # WebSocket server for transcripts and updates
 │   └── README.md               # WebSocket documentation
 │
 ├── main.py                      # Application entry point
@@ -43,76 +38,58 @@ backend/app/
 - Application initialization and configuration
 - CORS middleware setup
 - Route registration
-- Socket.IO server integration
+- WebSocket server integration
 - Server configuration and launch
 
 ### API Layer (`api/`)
 
-#### Room Management (`rooms.py`, 1.4KB)
+#### Room Management (`rooms.py`)
 
-- Room creation endpoints
-- Room joining/leaving logic
+- Room creation with LiveKit integration
+- Room joining with token generation
 - Room status management
 - Room listing functionality
+- LiveKit token generation for participants
 
 ### Core Components (`core/`)
 
-#### Configuration (`config.py`, 1.2KB)
+#### Configuration (`config.py`)
 
 - Environment configuration
-- Application settings
+- LiveKit settings (host, API key, secret)
+- WebSocket settings
 - Security parameters
 - Feature flags
 
 ### Data Models (`models/`)
 
-#### Room Model (`room.py`, 585B)
+#### Room Model (`room.py`)
 
 - Room data structure
 - Room state management
 - Participant tracking
+- Transcript storage
 - Room metadata
-
-### Monitoring (`monitoring/`)
-
-#### Metrics (`metrics.py`, 4.1KB)
-
-- Performance monitoring
-- Resource usage tracking
-- Error rate monitoring
-- System health metrics
 
 ### Services (`services/`)
 
-#### Audio Processing (`audio_processor.py`, 4.8KB)
+#### LiveKit Service (`livekit_service.py`)
 
-- Audio stream handling
-- Audio format conversion
-- Signal processing
-- Quality enhancement
+- LiveKit token generation
+- Room creation in LiveKit
+- Room deletion in LiveKit
+- Room state management with LiveKit
+- WebRTC configuration
 
-#### Event Broadcasting (`event_broadcaster.py`, 3.8KB)
+#### Room Service (`room_service.py`)
 
-- Real-time event distribution
-- Message broadcasting
-- Event queuing
-- Delivery confirmation
-
-#### Room Audio (`room_audio.py`, 3.0KB)
-
-- Room audio stream management
-- Audio mixing
-- Participant audio handling
-- Audio quality control
-
-#### Room Service (`room_service.py`, 3.8KB)
-
-- Room business logic
-- Room state management
+- Local room state management
 - Participant management
+- Transcript management
+- Integration with LiveKit service
 - Room lifecycle handling
 
-#### Speech-to-Text (`speech_to_text.py`, 1.2KB)
+#### Speech-to-Text (`speech_to_text.py`)
 
 - Audio transcription
 - Language processing
@@ -121,14 +98,12 @@ backend/app/
 
 ### WebSocket Layer (`websocket/`)
 
-#### Socket.IO Server (`socketio_server.py`, 10.2KB)
+#### WebSocket Server (`ws_server.py`)
 
-- Socket.IO event handling
-- WebRTC signaling protocol
-- Room management
+- Real-time room updates
+- Transcript broadcasting
 - Connection state management
-- Heartbeat monitoring
-- Peer connection handling
+- Room event handling
 
 ## Component Dependencies
 
@@ -136,53 +111,53 @@ backend/app/
 
 ```
 services/
+├── livekit_service.py
+│   └── core/config.py
 ├── room_service.py
-│   └── models/room.py
-├── audio_processor.py
-│   └── services/speech_to_text.py
-└── event_broadcaster.py
-    └── websocket/socketio_server.py
+│   ├── models/room.py
+│   └── services/livekit_service.py
+└── speech_to_text.py
 ```
 
 ### WebSocket Stack
 
 ```
-websocket/socketio_server.py
+websocket/ws_server.py
 └── services/room_service.py
 ```
 
 ### API Stack
 
 ```
-api/
-└── rooms.py
-    └── services/room_service.py
+api/rooms.py
+├── services/room_service.py
+└── services/livekit_service.py
 ```
 
 ## Communication Flow
 
-1. Client connects via Socket.IO (`websocket/socketio_server.py`)
-2. Room creation/joining handled by Room Service (`services/room_service.py`)
-3. Audio processing pipeline:
-   - Audio received through WebRTC
-   - Processed by Audio Processor (`services/audio_processor.py`)
-   - Transcribed by Speech-to-Text (`services/speech_to_text.py`)
-   - Results broadcasted via Socket.IO events
-4. WebRTC signaling handled by Socket.IO events
-5. System metrics collected by Monitoring (`monitoring/metrics.py`)
+1. Client requests to create/join room via REST API
+2. Server generates LiveKit token and creates/joins room
+3. Client connects to LiveKit server for WebRTC
+4. Client connects to WebSocket server for room updates
+5. Audio processing pipeline:
+   - Audio handled by LiveKit WebRTC
+   - Speech-to-text processing on client side
+   - Transcripts sent to WebSocket server
+   - Server broadcasts transcripts to room participants
 
 ## Key Features
 
-- Real-time audio processing and transcription
-- Socket.IO based real-time communication
-- WebRTC peer connection management
+- LiveKit integration for WebRTC
+- Token-based authentication
+- Real-time audio communication
 - Room-based multi-user communication
+- Real-time transcript broadcasting
 - Event-driven architecture
-- Performance monitoring and metrics
-- Automatic connection cleanup
-- Robust error handling and recovery
+- Automatic room cleanup
+- Robust error handling
 
-## Socket.IO Events
+## WebSocket Events
 
 ### Connection Events
 
@@ -194,18 +169,57 @@ api/
 
 - `join_room`: User joining a room
 - `leave_room`: User leaving a room
-- `user_joined`: Broadcast when a user joins
-- `user_left`: Broadcast when a user leaves
-- `room_info`: Room state and participants
+- `room_info`: Room state and participants update
 
-### WebRTC Events
+### Transcript Events
 
-- `offer`: SDP offer for peer connection
-- `answer`: SDP answer for peer connection
-- `ice_candidate`: ICE candidate exchange
+- `transcript_update`: New transcript from user
+- `transcript_received`: Broadcast transcript to room
 
 ### System Events
 
-- `heartbeat`: Connection health check
-- `heartbeat_ack`: Health check acknowledgment
 - `error`: Error message broadcasting
+
+## Security Features
+
+- LiveKit token-based authentication
+- Room access control
+- Participant validation
+- Environment-based configuration
+- CORS protection
+
+## Error Handling
+
+- Custom exception handling
+- Proper error responses
+- Connection error recovery
+- Room state consistency
+- Token validation
+
+## Configuration
+
+Key environment variables:
+
+```env
+# LiveKit Configuration
+LIVEKIT_HOST=wss://your-livekit-server.com
+LIVEKIT_API_KEY=your_api_key_here
+LIVEKIT_API_SECRET=your_api_secret_here
+
+# WebSocket Configuration
+WS_MESSAGE_QUEUE=redis://localhost:6379/0
+```
+
+## API Endpoints
+
+### Room Management
+
+- `POST /api/rooms` - Create new room
+- `POST /api/rooms/{room_id}/join` - Join existing room
+- `GET /api/rooms` - List all rooms
+- `GET /api/rooms/{room_id}` - Get room details
+- `DELETE /api/rooms/{room_id}` - Delete room
+
+## WebSocket Path
+
+- `/ws` - WebSocket connection for room updates and transcripts

@@ -19,14 +19,17 @@ pydantic-settings
 requests
 
 # 音频处理
-torch
-torchaudio
-numpy
-sounddevice
-soundfile
+# torch
+# torchaudio
+# numpy
+# sounddevice
+# soundfile
 
 # 性能监控
 psutil
 
 # LiveKit
 livekit
+
+# JWT
+PyJWT

@@ -3,10 +3,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import rooms
-from app.websocket.socketio_server import app as socketio_app
+from app.websocket.ws_server import app as ws_app
 
 app = FastAPI(
-    title="音频对话分析系统",
+    title="UnderstandUs",
     description="Real-time audio conversation analysis API",
     version="1.0.0"
 )
@@ -14,23 +14,23 @@ app = FastAPI(
 # CORS middleware configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # 在生产环境中应该设置具体的域名
+    allow_origins=["http://localhost:3000"],  # Update with production domain
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
-    max_age=3600,  # 预检请求的缓存时间
+    max_age=3600,
 )
 
-# 注册路由
+# Register routes
 app.include_router(rooms.router, prefix="/api", tags=["rooms"])
 
-# 挂载 Socket.IO 应用
-app.mount("/socket.io", socketio_app)
+# Mount WebSocket application
+app.mount("/ws", ws_app)
 
 @app.get("/")
 async def root():
-    return {"message": "音频对话分析系统 API"}
+    return {"message": "UnderstandUs API"}
 
 if __name__ == "__main__":
     uvicorn.run(
