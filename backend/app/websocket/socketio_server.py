@@ -10,8 +10,22 @@ from app.services.room_service import room_service
 logger = logging.getLogger(__name__)
 
 # 创建异步 Socket.IO 服务器
-sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
-app = socketio.ASGIApp(sio)
+sio = socketio.AsyncServer(
+    async_mode='asgi',
+    cors_allowed_origins=['http://localhost:3000'],
+    logger=True,
+    engineio_logger=True,
+    ping_timeout=60,
+    ping_interval=25,
+    max_http_buffer_size=1e8,
+    allow_upgrades=True,
+    namespaces='/'
+)
+app = socketio.ASGIApp(
+    socketio_server=sio,
+    socketio_path='socket.io',
+    static_files=None
+)
 
 # 存储连接信息
 class ConnectionStore:

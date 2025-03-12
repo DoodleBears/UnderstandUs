@@ -14,7 +14,7 @@ app = FastAPI(
 # CORS middleware configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 在生产环境中应该设置具体的域名
+    allow_origins=["http://localhost:3000"],  # 在生产环境中应该设置具体的域名
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -26,7 +26,7 @@ app.add_middleware(
 app.include_router(rooms.router, prefix="/api", tags=["rooms"])
 
 # 挂载 Socket.IO 应用
-app.mount("/ws", socketio_app)
+app.mount("/", socketio_app)
 
 @app.get("/")
 async def root():
