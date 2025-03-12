@@ -31,7 +31,6 @@ interface Transcript {
 }
 
 export default function RoomPage() {
-  const { roomId } = useParams()
   const [userId, setUserId] = useState('')
   const [userName, setUserName] = useState('')
 
@@ -110,6 +109,43 @@ function RoomContent({
     userName,
     handleSocketMessage
   )
+
+  // Handle page unload
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Only show confirmation dialog
+      e.preventDefault()
+      e.returnValue = ''
+    }
+
+    const handleUnload = () => {
+      // User confirmed closing the page
+      if (isConnected) {
+        sendMessage({ type: 'leave_room' })
+      }
+      webrtc.actions.disconnect()
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    window.addEventListener('unload', handleUnload)
+
+    // Cleanup function - only remove event listeners
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      window.removeEventListener('unload', handleUnload)
+    }
+  }, [isConnected, webrtc.actions])
+
+  // Handle component unmount
+  useEffect(() => {
+    // Only add cleanup for actual unmount
+    return () => {
+      if (isConnected) {
+        sendMessage({ type: 'leave_room' })
+        webrtc.actions.disconnect()
+      }
+    }
+  }, []) // Empty dependency array ensures this only runs on unmount
 
   // Send user info when connected
   useEffect(() => {

@@ -73,11 +73,20 @@ async def handle_user_disconnect(room_id: str, user_id: str):
         # 更新房间参与者
         room = await room_service.remove_participant(room_id, user_id)
         if room:
-            # 广播用户离开消息
-            await sio.emit('user_left', {
-                'user_id': user_id,
-                'room_id': room_id
-            }, room=room_id)
+            # 如果房间为空，清理房间
+            if len(room.participants) == 0:
+                await room_service.cleanup_empty_room(room_id)
+                # 广播房间已删除消息
+                await sio.emit('room_deleted', {
+                    'room_id': room_id,
+                    'message': 'Room has been deleted as it is empty'
+                }, room=room_id)
+            else:
+                # 广播用户离开消息
+                await sio.emit('user_left', {
+                    'user_id': user_id,
+                    'room_id': room_id
+                }, room=room_id)
 
 @sio.event
 async def join_room(sid, data):
@@ -156,6 +165,25 @@ async def leave_room(sid, data):
         await handle_user_disconnect(room_id, user_id)
         await sio.leave_room(sid, room_id)
         
+        # 广播用户离开消息
+        await sio.emit('user_left', {
+            'user_id': user_id,
+            'room_id': room_id
+        }, room=room_id)
+        
+        # 更新房间参与者
+        room = await room_service.remove_participant(room_id, user_id)
+        if room:
+            participants = [
+                {"id": p.user_id, "name": p.name}
+                for p in room.participants.values()
+            ]
+            # 发送房间信息给所有用户
+            await sio.emit('room_info', {
+                'room_id': room_id,
+                'participants': participants
+            }, room=room_id)
+            
     except Exception as e:
         logger.error(f"Error in leave_room: {str(e)}")
 

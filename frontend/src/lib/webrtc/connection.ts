@@ -192,7 +192,21 @@ export class WebRTCManager {
     }
 
     peer.connection.ontrack = (event) => {
-      peer.stream = event.streams[0]
+      // 检查轨道是否来自本地流
+      const isLocalTrack = this._localStream
+        ?.getTracks()
+        .some((localTrack) => event.track.id === localTrack.id)
+
+      // 只处理远程用户的音频流
+      if (!isLocalTrack) {
+        peer.stream = event.streams[0]
+        // 创建新的音频元素来播放远程音频
+        const audioElement = new Audio()
+        audioElement.srcObject = event.streams[0]
+        audioElement.autoplay = true
+        // 可选：添加其他音频设置
+        audioElement.volume = 1.0
+      }
     }
 
     peer.connection.ondatachannel = (event) => {
