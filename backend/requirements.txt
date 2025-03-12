@@ -8,8 +8,6 @@ python-socketio
 # 环境变量
 python-dotenv
 
-# 网络
-websockets
 
 # 大模型
 openai
