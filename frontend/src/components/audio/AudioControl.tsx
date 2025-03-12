@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button'
+import useRTCStore from '@/store/useRTCStore'
 import React, { useEffect, useState } from 'react'
 import { useAudio } from './useAudio'
 
@@ -27,6 +28,8 @@ export const AudioControl: React.FC<AudioControlProps> = ({
     setVolume,
   } = useAudio()
 
+  const { setLocalStream } = useRTCStore()
+
   const [availableDevices, setAvailableDevices] = useState<{
     audioInputs: MediaDeviceInfo[]
     audioOutputs: MediaDeviceInfo[]
@@ -35,7 +38,14 @@ export const AudioControl: React.FC<AudioControlProps> = ({
     audioOutputs: [],
   })
 
-  // 获取可用的音频设备
+  // Handle audio stream for WebRTC
+  useEffect(() => {
+    if (isReady && state.stream) {
+      setLocalStream(state.stream)
+    }
+  }, [isReady, state.stream, setLocalStream])
+
+  // Get available audio devices
   useEffect(() => {
     const getDevices = async () => {
       try {
@@ -48,11 +58,10 @@ export const AudioControl: React.FC<AudioControlProps> = ({
         )
         setAvailableDevices({ audioInputs, audioOutputs })
       } catch (err) {
-        console.error('获取设备列表失败:', err)
+        console.error('Failed to get device list:', err)
       }
     }
 
-    // 监听设备变化
     navigator.mediaDevices.addEventListener('devicechange', getDevices)
     getDevices()
 
@@ -62,15 +71,15 @@ export const AudioControl: React.FC<AudioControlProps> = ({
   }, [])
 
   if (!isReady) {
-    return <div className={className}>正在初始化音频系统...</div>
+    return <div className={className}>Initializing audio system...</div>
   }
 
   if (error) {
     return (
       <div className={className}>
-        <div className="text-red-500">音频系统错误: {error.message}</div>
+        <div className="text-red-500">Audio system error: {error.message}</div>
         <Button onClick={() => requestPermissions()} variant="destructive">
-          重试
+          Retry
         </Button>
       </div>
     )
@@ -79,9 +88,9 @@ export const AudioControl: React.FC<AudioControlProps> = ({
   if (!permissions.granted) {
     return (
       <div className={className}>
-        <div>需要麦克风权限</div>
+        <div>Microphone permission required</div>
         <Button onClick={() => requestPermissions()} variant="default">
-          授权访问麦克风
+          Grant Microphone Access
         </Button>
       </div>
     )
@@ -89,13 +98,13 @@ export const AudioControl: React.FC<AudioControlProps> = ({
 
   return (
     <div className={`flex flex-col gap-4 ${className}`}>
-      {/* 麦克风控制 */}
+      {/* Microphone control */}
       <div className="flex items-center gap-4">
         <Button
           onClick={() => toggleMicrophone()}
           variant={state.isEnabled ? 'default' : 'secondary'}
         >
-          {state.isEnabled ? '麦克风开启' : '麦克风关闭'}
+          {state.isEnabled ? 'Microphone On' : 'Microphone Off'}
         </Button>
 
         {state.isEnabled && (
@@ -103,17 +112,17 @@ export const AudioControl: React.FC<AudioControlProps> = ({
             onClick={() => toggleMute()}
             variant={state.isMuted ? 'destructive' : 'default'}
           >
-            {state.isMuted ? '取消静音' : '静音'}
+            {state.isMuted ? 'Unmute' : 'Mute'}
           </Button>
         )}
       </div>
 
-      {/* 设备选择器 */}
+      {/* Device selector */}
       {showDeviceSelector && (
         <div className="flex flex-col gap-2">
           {availableDevices.audioInputs.length > 0 && (
             <div className="flex items-center gap-2">
-              <label className="text-sm">选择麦克风:</label>
+              <label className="text-sm">Select Microphone:</label>
               <select
                 value={state.deviceId || ''}
                 onChange={(e) => {
@@ -126,7 +135,8 @@ export const AudioControl: React.FC<AudioControlProps> = ({
               >
                 {availableDevices.audioInputs.map((device) => (
                   <option key={device.deviceId} value={device.deviceId}>
-                    {device.label || `麦克风 ${device.deviceId.slice(0, 8)}...`}
+                    {device.label ||
+                      `Microphone ${device.deviceId.slice(0, 8)}...`}
                   </option>
                 ))}
               </select>
@@ -135,7 +145,7 @@ export const AudioControl: React.FC<AudioControlProps> = ({
 
           {availableDevices.audioOutputs.length > 0 && (
             <div className="flex items-center gap-2">
-              <label className="text-sm">选择扬声器:</label>
+              <label className="text-sm">Select Speaker:</label>
               <select
                 value={state.speakerDeviceId || ''}
                 onChange={(e) => {
@@ -146,13 +156,13 @@ export const AudioControl: React.FC<AudioControlProps> = ({
                         typeof HTMLMediaElement.prototype.setSinkId ===
                         'function'
                       ) {
-                        // 设置音频输出设备
+                        // Set audio output device
                         const audioElements = document.querySelectorAll('audio')
                         audioElements.forEach((audio) => {
                           ;(audio as any)
                             .setSinkId(deviceId)
                             .catch((err: Error) => {
-                              console.error('切换扬声器失败:', err)
+                              console.error('Failed to switch speaker:', err)
                             })
                         })
                       }
@@ -163,7 +173,8 @@ export const AudioControl: React.FC<AudioControlProps> = ({
               >
                 {availableDevices.audioOutputs.map((device) => (
                   <option key={device.deviceId} value={device.deviceId}>
-                    {device.label || `扬声器 ${device.deviceId.slice(0, 8)}...`}
+                    {device.label ||
+                      `Speaker ${device.deviceId.slice(0, 8)}...`}
                   </option>
                 ))}
               </select>
@@ -172,10 +183,10 @@ export const AudioControl: React.FC<AudioControlProps> = ({
         </div>
       )}
 
-      {/* 音量控制 */}
+      {/* Volume control */}
       {showVolumeControl && state.isEnabled && (
         <div className="flex items-center gap-2">
-          <label className="text-sm">输入音量:</label>
+          <label className="text-sm">Input Volume:</label>
           <input
             type="range"
             min="0"
@@ -189,11 +200,11 @@ export const AudioControl: React.FC<AudioControlProps> = ({
         </div>
       )}
 
-      {/* 音频指示器 */}
+      {/* Audio indicator */}
       {state.isEnabled && !state.isMuted && (
         <div className="flex items-center gap-2">
           <div className="h-4 w-4 animate-pulse rounded-full bg-green-500" />
-          <span className="text-sm">正在采集音频</span>
+          <span className="text-sm">Capturing Audio</span>
         </div>
       )}
     </div>

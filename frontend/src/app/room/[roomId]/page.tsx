@@ -61,6 +61,9 @@ function RoomContent({
   const { roomId } = useParams()
   const router = useRouter()
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [remoteVolumes, setRemoteVolumes] = useState<Map<string, number>>(
+    new Map()
+  )
 
   const audio = useAudio()
   const {
@@ -70,7 +73,211 @@ function RoomContent({
     participants,
     transcripts,
     setLocalStream,
+    remoteStreams,
   } = useRTCStore()
+
+  // Handle remote audio streams
+  useEffect(() => {
+    console.log(
+      '[Audio] Current remote streams:',
+      Array.from(remoteStreams.entries()).map(([peerId, stream]) => ({
+        peerId,
+        streamId: stream.id,
+        tracks: stream.getTracks().map((t) => ({
+          kind: t.kind,
+          enabled: t.enabled,
+          muted: t.muted,
+          readyState: t.readyState,
+        })),
+      }))
+    )
+
+    remoteStreams.forEach((stream, peerId) => {
+      console.log(`[Audio] Setting up audio for peer ${peerId}`)
+      let audioElement = document.getElementById(
+        `audio-${peerId}`
+      ) as HTMLAudioElement
+
+      if (!audioElement) {
+        console.log(`[Audio] Creating new audio element for peer ${peerId}`)
+        audioElement = new Audio()
+        audioElement.id = `audio-${peerId}`
+        audioElement.autoplay = true
+        audioElement.volume = remoteVolumes.get(peerId) || 1
+        document.body.appendChild(audioElement)
+
+        audioElement.onerror = () => {
+          console.error(`[Audio] Error for peer ${peerId}:`)
+          const mediaError = audioElement.error
+          if (mediaError) {
+            console.error(
+              'Error code:',
+              mediaError.code,
+              'Message:',
+              mediaError.message
+            )
+          }
+        }
+      }
+
+      // Update the stream if it changed
+      if (audioElement.srcObject !== stream) {
+        const audioTracks = stream.getAudioTracks()
+        console.log(`[Audio] Audio tracks for peer ${peerId}:`, {
+          count: audioTracks.length,
+          tracks: audioTracks.map((t) => ({
+            kind: t.kind,
+            enabled: t.enabled,
+            muted: t.muted,
+            readyState: t.readyState,
+            settings: t.getSettings(),
+          })),
+        })
+
+        if (audioTracks.length > 0) {
+          console.log(`[Audio] Setting stream for peer ${peerId}`)
+          audioElement.srcObject = stream
+
+          const playPromise = audioElement.play()
+          if (playPromise !== undefined) {
+            playPromise
+              .then(() => {
+                console.log(
+                  `[Audio] Successfully started playback for peer ${peerId}`
+                )
+              })
+              .catch((error) => {
+                console.error(
+                  `[Audio] Error playing audio for peer ${peerId}:`,
+                  error
+                )
+                if (error.name === 'NotAllowedError') {
+                  const playButton = document.createElement('button')
+                  playButton.textContent = '开始播放音频'
+                  playButton.onclick = () => {
+                    audioElement
+                      .play()
+                      .then(() =>
+                        console.log(
+                          `[Audio] Manual playback started for peer ${peerId}`
+                        )
+                      )
+                      .catch((err) =>
+                        console.error(
+                          `[Audio] Manual playback failed for peer ${peerId}:`,
+                          err
+                        )
+                      )
+                    playButton.remove()
+                  }
+                  document.body.appendChild(playButton)
+                }
+              })
+          }
+        } else {
+          console.warn(
+            `[Audio] No audio tracks found in stream for peer ${peerId}`
+          )
+        }
+      }
+
+      // Add event listeners for audio element
+      if (!audioElement.onplay) {
+        audioElement.onplay = () => {
+          console.log(`[Audio] Started playing for peer ${peerId}`, {
+            currentTime: audioElement.currentTime,
+            duration: audioElement.duration,
+            paused: audioElement.paused,
+            volume: audioElement.volume,
+            muted: audioElement.muted,
+            readyState: audioElement.readyState,
+          })
+        }
+        audioElement.onpause = () =>
+          console.log(`[Audio] Paused for peer ${peerId}`, {
+            currentTime: audioElement.currentTime,
+            readyState: audioElement.readyState,
+          })
+        audioElement.onended = () =>
+          console.log(`[Audio] Ended for peer ${peerId}`, {
+            currentTime: audioElement.currentTime,
+            readyState: audioElement.readyState,
+          })
+        audioElement.onloadedmetadata = () => {
+          console.log(`[Audio] Metadata loaded for peer ${peerId}:`, {
+            duration: audioElement.duration,
+            readyState: audioElement.readyState,
+            paused: audioElement.paused,
+            volume: audioElement.volume,
+            muted: audioElement.muted,
+          })
+          if (audioElement.muted) {
+            console.log(`[Audio] Unmuting audio element for peer ${peerId}`)
+            audioElement.muted = false
+          }
+        }
+        audioElement.onwaiting = () =>
+          console.log(`[Audio] Waiting for data for peer ${peerId}`, {
+            readyState: audioElement.readyState,
+          })
+        audioElement.onstalled = () =>
+          console.log(`[Audio] Playback stalled for peer ${peerId}`, {
+            readyState: audioElement.readyState,
+          })
+        audioElement.onsuspend = () =>
+          console.log(`[Audio] Data loading suspended for peer ${peerId}`, {
+            readyState: audioElement.readyState,
+          })
+      }
+
+      // Monitor audio tracks
+      stream.getAudioTracks().forEach((track) => {
+        console.log(`[Audio] Audio track for peer ${peerId}:`, {
+          enabled: track.enabled,
+          muted: track.muted,
+          readyState: track.readyState,
+          constraints: track.getConstraints(),
+          settings: track.getSettings(),
+        })
+
+        if (!track.enabled) {
+          console.log(`[Audio] Enabling disabled track for peer ${peerId}`)
+          track.enabled = true
+        }
+      })
+    })
+
+    // Cleanup function
+    return () => {
+      remoteStreams.forEach((_, peerId) => {
+        console.log(`[Audio] Cleaning up audio for peer ${peerId}`)
+        const audioElement = document.getElementById(
+          `audio-${peerId}`
+        ) as HTMLAudioElement
+        if (audioElement) {
+          audioElement.pause()
+          audioElement.srcObject = null
+          audioElement.remove()
+        }
+      })
+    }
+  }, [remoteStreams, remoteVolumes])
+
+  // Function to adjust remote participant volume
+  const adjustParticipantVolume = (peerId: string, volume: number) => {
+    console.log(`[Audio] Adjusting volume for peer ${peerId} to ${volume}`)
+    const audioElement = document.getElementById(
+      `audio-${peerId}`
+    ) as HTMLAudioElement
+    if (audioElement) {
+      audioElement.volume = volume
+      setRemoteVolumes(new Map(remoteVolumes.set(peerId, volume)))
+    } else {
+      console.warn(
+        `[Audio] Could not adjust volume for peer ${peerId} - no audio element found`
+      )
+    }
+  }
 
   // Handle page unload
   useEffect(() => {
@@ -154,10 +361,49 @@ function RoomContent({
                       key={participant.id}
                       className="flex items-center justify-between rounded-lg border p-2"
                     >
-                      <div className="flex flex-col">
-                        <span className="font-medium">{participant.name}</span>
-                        <div className="my-2 border-b border-gray-500 dark:border-gray-300" />
-                        <span className="font-medium">{participant.id}</span>
+                      <div className="flex w-full flex-col gap-2">
+                        <div className="flex flex-col gap-2">
+                          <span className="font-medium">
+                            {participant.name}
+                          </span>
+                          <span className="text-muted-foreground text-xs">
+                            {participant.id}
+                          </span>
+                        </div>
+
+                        {participant.id !== userId &&
+                          remoteStreams.has(participant.id) && (
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.1"
+                                value={remoteVolumes.get(participant.id) || 1}
+                                onChange={(e) =>
+                                  adjustParticipantVolume(
+                                    participant.id,
+                                    Number(e.target.value)
+                                  )
+                                }
+                                className="w-full"
+                              />
+                              <span className="w-8 text-xs">
+                                {Math.round(
+                                  (remoteVolumes.get(participant.id) || 1) * 100
+                                )}
+                                %
+                              </span>
+                            </div>
+                          )}
+                        {remoteStreams.has(participant.id) && (
+                          <div className="flex items-center gap-2">
+                            <div className="h-2 w-2 rounded-full bg-green-500" />
+                            <span className="text-xs text-green-600">
+                              Audio Connected
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -201,7 +447,10 @@ function RoomContent({
       <div className="bg-background border-t px-4 py-3">
         <div className="flex items-center justify-center">
           <AudioStatus />
-          <AudioControl className="flex-row items-center gap-4" />
+          <AudioControl
+            showDeviceSelector={true}
+            className="flex-row items-center gap-4"
+          />
         </div>
       </div>
 

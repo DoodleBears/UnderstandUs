@@ -39,11 +39,10 @@ frontend/
 │   │   │   ├── devices.ts        # Device management
 │   │   │   ├── permissions.ts    # Permission handling
 │   │   │   └── types.ts          # Audio type definitions
-│   │   ├── utils.ts              # Shared utilities
-│   │   └── websocket.ts          # WebSocket management
+│   │   └── utils.ts              # Shared utilities
 │   │
-│   └── hooks/
-│       └── useWebSocket.ts       # WebSocket hook
+│   └── store/
+│       └── useRTCStore.ts        # Zustand store for WebRTC state
 │
 ├── public/                       # Static assets
 ├── docs/                         # Documentation
@@ -51,196 +50,198 @@ frontend/
 └── package.json                  # Project configuration
 ```
 
-This document provides a detailed overview of each file's functionality in the UnderstandUs frontend project.
+## State Management (`src/store/`)
 
-## App Directory (`src/app/`)
+### RTC Store (`useRTCStore.ts`)
 
-### Core Files
+Centralized state management for WebRTC and real-time communication:
 
-- `layout.tsx` - Root layout component that wraps all pages, provides global styling and context providers
-- `page.tsx` - Home page component, contains the main landing page UI and navigation
-- `globals.css` - Global CSS styles and Tailwind CSS configurations
-- `favicon.ico` - Application favicon
+- **State Management**
 
-### Room Feature
+  - Socket.IO connection state
+  - WebRTC peer connections
+  - Room participants
+  - Transcripts
+  - Local media stream
+  - Connection status
 
-- `room/` - Directory containing room-related page components and logic
+- **Actions**
+
+  - Socket.IO Actions
+
+    - `connect`: Establishes connection to room
+    - `disconnect`: Closes all connections
+    - `sendMessage`: Sends messages through Socket.IO
+
+  - WebRTC Actions
+
+    - `setLocalStream`: Sets local audio stream
+    - `createPeerConnection`: Creates new peer connection
+    - `handleSignalingMessage`: Processes signaling messages
+
+  - Room Actions
+    - `updateParticipants`: Updates room participant list
+    - `addTranscript`: Adds new transcript entry
+
+- **Connection Flow**
+
+  - New User Joining:
+
+    1. Connects to Socket.IO server
+    2. Receives existing users list
+    3. Waits for connection offers from existing users
+
+  - Existing Users:
+    1. Receives notification of new user
+    2. Initiates WebRTC connection
+    3. Sends offer to new user
 
 ## Components Directory (`src/components/`)
-
-### Room Components (`components/room/`)
-
-- `RoomList.tsx` - Displays a list of available rooms with join/create functionality
-- `RoomForm.tsx` - Form component for creating new rooms or joining existing ones
 
 ### Audio Components (`components/audio/`)
 
 Audio-related UI components for managing sound input/output:
 
-- `AudioProvider.tsx` (4.2KB)
-
-  - Context provider for audio functionality
-  - Manages global audio state
-  - Handles audio device initialization
-  - Provides audio context to child components
-
 - `AudioControl.tsx` (3.6KB)
 
-  - UI controls for audio management
-  - Volume control interface
+  - Microphone controls (enable/disable)
   - Mute/unmute functionality
-  - Device selection controls
+  - Device selection
+  - Volume control
+  - Audio level visualization
 
 - `AudioStatus.tsx` (2.4KB)
 
-  - Displays current audio status
-  - Shows connection state
-  - Indicates recording status
-  - Visualizes audio levels
+  - Connection state display
+  - Audio status indicators
+  - Error handling UI
 
-- `AudioRecorder.tsx` (3.2KB)
+- `AudioProvider.tsx` (4.2KB)
 
-  - Handles audio recording functionality
-  - Start/stop recording controls
-  - Recording status indication
-  - Audio file management
+  - Audio context provider
+  - Device initialization
+  - Permission management
+  - Stream handling
 
 - `useAudio.ts` (2.4KB)
-  - Custom hook for audio management
-  - Provides audio control methods
-  - Manages audio state
-  - Handles device changes
-
-### WebRTC Components (`components/webrtc/`)
-
-WebRTC-related components for real-time communication:
-
-- `WebRTCProvider.tsx` (5.3KB)
-  - Main WebRTC context provider
-  - Manages peer connections
-  - Handles connection state
-  - Provides WebRTC context to application
-  - Coordinates with signaling server
-  - Manages media streams
-  - Handles connection lifecycle
-  - Error handling and recovery
-
-### UI Components (`components/ui/`)
-
-Reusable UI components and design system elements
-
-### Transcript Components (`components/transcript/`)
-
-- `TranscriptDisplay.tsx` - Component for displaying and managing real-time transcriptions
+  - Audio device management
+  - Stream control
+  - Permission handling
+  - Volume control
 
 ## Lib Directory (`src/lib/`)
 
 ### WebRTC Module (`lib/webrtc/`)
 
-- `connection.ts` - Manages WebRTC peer connections and data channels
-- `signaling.ts` - Handles WebRTC signaling process and connection establishment
-- `types.ts` - TypeScript type definitions for WebRTC-related functionality
+- `connection.ts`
+
+  - WebRTC peer connection management
+  - Media stream handling
+  - ICE candidate processing
+  - Connection state management
+
+- `signaling.ts`
+
+  - Socket.IO signaling implementation
+  - Room event handling
+  - Connection establishment
+  - Message routing
+
+- `types.ts`
+  - WebRTC interfaces
+  - Signaling types
+  - Connection state types
+  - Message types
 
 ### Audio Module (`lib/audio/`)
 
-- `capture.ts` - Handles audio capture and processing functionality
-- `devices.ts` - Manages audio device selection and configuration
-- `permissions.ts` - Handles audio permission requests and status
-- `types.ts` - TypeScript type definitions for audio-related features
+- `capture.ts`
 
-### Utility Files
+  - Audio stream acquisition
+  - Track management
+  - Audio processing
 
-- `utils.ts` - General utility functions used across the application
-- `websocket.ts` - WebSocket connection management and event handling
+- `devices.ts`
 
-## Hooks Directory (`src/hooks/`)
+  - Device enumeration
+  - Device selection
+  - Change detection
 
-### WebSocket Hook
+- `permissions.ts`
+  - Permission requests
+  - Permission state
+  - Error handling
 
-- `useWebSocket.ts` - Custom hook for managing WebSocket connections and real-time communication
+## Communication Flow
 
-## File Responsibilities
+### WebRTC Connection Establishment
 
-### WebRTC Layer
+1. **Room Join**
 
-- **Connection Management**: `lib/webrtc/connection.ts`
+   ```
+   User -> Socket.IO Server
+   - join_room event
+   - User info (ID, name)
+   ```
 
-  - Establishes and maintains peer connections
-  - Handles data channel creation
-  - Manages connection state
-  - Provides peer management through `getPeers` method
-  - Handles message sending through data channels
+2. **Existing Users Notification**
 
-- **Signaling**: `lib/webrtc/signaling.ts`
-  - Implements Socket.IO-based signaling protocol
-  - Handles connection lifecycle (connect, disconnect)
-  - Manages room joining and leaving
-  - Processes standard WebRTC events (offer, answer, ICE candidates)
-  - Handles room events (user joined, left, updates)
-  - Provides automatic reconnection support
-  - Implements error handling and state management
+   ```
+   Socket.IO Server -> New User
+   - existing_users event
+   - List of current users
+   ```
 
-### Audio Layer
+3. **New User Broadcast**
 
-- **Capture**: `lib/audio/capture.ts`
+   ```
+   Socket.IO Server -> Existing Users
+   - user_joined event
+   - New user info
+   ```
 
-  - Manages audio stream acquisition
-  - Handles audio processing
-  - Controls audio track lifecycle
+4. **Connection Establishment**
+   ```
+   Existing User -> New User
+   - Create peer connection
+   - Send offer
+   - Exchange ICE candidates
+   ```
 
-- **Device Management**: `lib/audio/devices.ts`
+### Audio Stream Management
 
-  - Enumerates available audio devices
-  - Handles device selection
-  - Manages device changes
+1. **Device Initialization**
 
-- **Permissions**: `lib/audio/permissions.ts`
-  - Handles microphone permissions
-  - Manages permission states
-  - Provides permission request UI
+   ```
+   AudioProvider
+   ├── Permission request
+   ├── Device enumeration
+   └── Stream creation
+   ```
 
-### Room Management
-
-- **Room List**: `components/room/RoomList.tsx`
-
-  - Displays available rooms
-  - Handles room selection
-  - Manages room status updates
-
-- **Room Creation**: `components/room/RoomForm.tsx`
-  - Provides room creation interface
-  - Validates room parameters
-  - Handles room joining logic
-
-### Real-time Communication
-
-- **WebSocket Hook**: `hooks/useWebSocket.ts`
-  - Manages WebSocket lifecycle
-  - Handles real-time events
-  - Provides connection state management
-
-### Transcription
-
-- **Transcript Display**: `components/transcript/TranscriptDisplay.tsx`
-  - Renders real-time transcriptions
-  - Manages transcript history
-  - Handles transcript formatting
+2. **Stream Distribution**
+   ```
+   AudioProvider -> WebRTC
+   ├── Local stream setup
+   └── Track distribution
+   ```
 
 ## File Dependencies
 
-### WebRTC Stack
+### State Management
 
 ```
-lib/webrtc/connection.ts
+store/useRTCStore.ts
+  ├─ lib/webrtc/connection.ts
   ├─ lib/webrtc/types.ts
-  └─ lib/webrtc/signaling.ts
+  └─ socket.io-client
 ```
 
 ### Audio Stack
 
 ```
-lib/audio/capture.ts
-  ├─ lib/audio/types.ts
+components/audio/AudioProvider.tsx
+  ├─ lib/audio/capture.ts
   ├─ lib/audio/devices.ts
   └─ lib/audio/permissions.ts
 ```
@@ -248,25 +249,8 @@ lib/audio/capture.ts
 ### Room Features
 
 ```
-components/room/RoomList.tsx
-  └─ components/room/RoomForm.tsx
-```
-
-### Component Dependencies
-
-```
-components/audio/
-├── AudioProvider.tsx
-│   ├── useAudio.ts
-│   └── AudioStatus.tsx
-├── AudioControl.tsx
-│   └── useAudio.ts
-└── AudioRecorder.tsx
-    └── AudioStatus.tsx
-
-components/webrtc/
-└── WebRTCProvider.tsx
-    ├── lib/webrtc/connection.ts
-    ├── lib/webrtc/signaling.ts
-    └── hooks/useWebSocket.ts
+app/room/[roomId]/page.tsx
+  ├─ store/useRTCStore.ts
+  ├─ components/audio/AudioControl.tsx
+  └─ components/audio/AudioStatus.tsx
 ```
