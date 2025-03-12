@@ -168,11 +168,17 @@ Reusable UI components and design system elements
   - Establishes and maintains peer connections
   - Handles data channel creation
   - Manages connection state
+  - Provides peer management through `getPeers` method
+  - Handles message sending through data channels
 
 - **Signaling**: `lib/webrtc/signaling.ts`
-  - Implements signaling protocol
-  - Handles ICE candidate exchange
-  - Manages offer/answer process
+  - Implements Socket.IO-based signaling protocol
+  - Handles connection lifecycle (connect, disconnect)
+  - Manages room joining and leaving
+  - Processes standard WebRTC events (offer, answer, ICE candidates)
+  - Handles room events (user joined, left, updates)
+  - Provides automatic reconnection support
+  - Implements error handling and state management
 
 ### Audio Layer
 

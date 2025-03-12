@@ -237,4 +237,15 @@ export class WebRTCManager {
       })
     }
   }
+
+  getPeers(): Map<string, PeerConnection> {
+    return this._peers
+  }
+
+  sendMessage(peerId: string, message: any): void {
+    const peer = this._peers.get(peerId)
+    if (peer?.dataChannel?.readyState === 'open') {
+      peer.dataChannel.send(JSON.stringify(message))
+    }
+  }
 }

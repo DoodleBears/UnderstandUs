@@ -6,12 +6,10 @@
 backend/app/
 ├── api/                           # API endpoints and routes
 │   ├── rooms.py                  # Room management endpoints
-│   ├── websocket.py             # WebSocket API endpoints
 │   └── README.md                # API documentation
 │
 ├── core/                         # Core application components
 │   ├── config.py                # Application configuration
-│   ├── connection_manager.py    # WebSocket connection management
 │   └── README.md                # Core module documentation
 │
 ├── models/                       # Data models and schemas
@@ -30,7 +28,7 @@ backend/app/
 │   └── README.md               # Services documentation
 │
 ├── websocket/                    # WebSocket handling
-│   ├── signaling.py            # WebRTC signaling implementation
+│   ├── socketio_server.py      # Socket.IO server implementation
 │   └── README.md               # WebSocket documentation
 │
 ├── main.py                      # Application entry point
@@ -45,7 +43,7 @@ backend/app/
 - Application initialization and configuration
 - CORS middleware setup
 - Route registration
-- Startup event handling
+- Socket.IO server integration
 - Server configuration and launch
 
 ### API Layer (`api/`)
@@ -57,13 +55,6 @@ backend/app/
 - Room status management
 - Room listing functionality
 
-#### WebSocket API (`websocket.py`, 6.7KB)
-
-- WebSocket connection endpoints
-- Real-time communication handling
-- Client message routing
-- Connection state management
-
 ### Core Components (`core/`)
 
 #### Configuration (`config.py`, 1.2KB)
@@ -72,13 +63,6 @@ backend/app/
 - Application settings
 - Security parameters
 - Feature flags
-
-#### Connection Manager (`connection_manager.py`, 9.2KB)
-
-- WebSocket connection lifecycle
-- Connection pool management
-- Client session tracking
-- Inactive connection cleanup
 
 ### Data Models (`models/`)
 
@@ -137,12 +121,14 @@ backend/app/
 
 ### WebSocket Layer (`websocket/`)
 
-#### Signaling (`signaling.py`, 9.8KB)
+#### Socket.IO Server (`socketio_server.py`, 10.2KB)
 
+- Socket.IO event handling
 - WebRTC signaling protocol
-- Peer connection establishment
-- ICE candidate exchange
-- Media negotiation
+- Room management
+- Connection state management
+- Heartbeat monitoring
+- Peer connection handling
 
 ## Component Dependencies
 
@@ -151,52 +137,75 @@ backend/app/
 ```
 services/
 ├── room_service.py
-│   ├── models/room.py
-│   └── core/connection_manager.py
+│   └── models/room.py
 ├── audio_processor.py
 │   └── services/speech_to_text.py
 └── event_broadcaster.py
-    └── websocket/signaling.py
+    └── websocket/socketio_server.py
 ```
 
 ### WebSocket Stack
 
 ```
-websocket/signaling.py
-├── core/connection_manager.py
-└── services/event_broadcaster.py
+websocket/socketio_server.py
+└── services/room_service.py
 ```
 
 ### API Stack
 
 ```
 api/
-├── rooms.py
-│   └── services/room_service.py
-└── websocket.py
-    ├── websocket/signaling.py
-    └── core/connection_manager.py
+└── rooms.py
+    └── services/room_service.py
 ```
 
 ## Communication Flow
 
-1. Client connects via WebSocket (`api/websocket.py`)
-2. Connection managed by Connection Manager (`core/connection_manager.py`)
-3. Room creation/joining handled by Room Service (`services/room_service.py`)
-4. Audio processing pipeline:
-   - Audio received through WebSocket
+1. Client connects via Socket.IO (`websocket/socketio_server.py`)
+2. Room creation/joining handled by Room Service (`services/room_service.py`)
+3. Audio processing pipeline:
+   - Audio received through WebRTC
    - Processed by Audio Processor (`services/audio_processor.py`)
    - Transcribed by Speech-to-Text (`services/speech_to_text.py`)
-   - Results broadcasted via Event Broadcaster (`services/event_broadcaster.py`)
-5. WebRTC signaling handled by Signaling module (`websocket/signaling.py`)
-6. System metrics collected by Monitoring (`monitoring/metrics.py`)
+   - Results broadcasted via Socket.IO events
+4. WebRTC signaling handled by Socket.IO events
+5. System metrics collected by Monitoring (`monitoring/metrics.py`)
 
 ## Key Features
 
 - Real-time audio processing and transcription
+- Socket.IO based real-time communication
 - WebRTC peer connection management
 - Room-based multi-user communication
 - Event-driven architecture
 - Performance monitoring and metrics
-- Scalable connection management
+- Automatic connection cleanup
 - Robust error handling and recovery
+
+## Socket.IO Events
+
+### Connection Events
+
+- `connect`: Client connection initialization
+- `disconnect`: Client disconnection handling
+- `connection_established`: Connection confirmation
+
+### Room Events
+
+- `join_room`: User joining a room
+- `leave_room`: User leaving a room
+- `user_joined`: Broadcast when a user joins
+- `user_left`: Broadcast when a user leaves
+- `room_info`: Room state and participants
+
+### WebRTC Events
+
+- `offer`: SDP offer for peer connection
+- `answer`: SDP answer for peer connection
+- `ice_candidate`: ICE candidate exchange
+
+### System Events
+
+- `heartbeat`: Connection health check
+- `heartbeat_ack`: Health check acknowledgment
+- `error`: Error message broadcasting

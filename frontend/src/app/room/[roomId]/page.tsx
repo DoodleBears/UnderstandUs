@@ -5,10 +5,10 @@ import { AudioProvider } from '@/components/audio/AudioProvider'
 import { AudioStatus } from '@/components/audio/AudioStatus'
 import { useAudio } from '@/components/audio/useAudio'
 import { useWebRTC, WebRTCProvider } from '@/components/webrtc/WebRTCProvider'
-import { useWebSocket } from '@/hooks/useWebSocket'
+import { useSocketIO } from '@/hooks/useSocketIO'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
-import { toast, Toaster } from 'react-hot-toast'
+import { Toaster } from 'react-hot-toast'
 import { v4 as uuidv4 } from 'uuid'
 
 interface Participant {
@@ -19,21 +19,21 @@ interface Participant {
 }
 
 interface Transcript {
-  user_id: string
-  text: string
-  is_final: boolean
-  timestamp: string
+  type: 'transcript'
+  payload: {
+    text: string
+    user_id: string
+    timestamp: number
+  }
 }
 
 export default function RoomPage() {
   const { roomId } = useParams()
   const userIdRef = useRef<string>(uuidv4())
-  // Wrap the actual content in providers
+
   return (
     <AudioProvider>
-      <WebRTCProvider
-        signalingUrl={`${process.env.NEXT_PUBLIC_WS_URL}/api/ws/room/${roomId}/user/${userIdRef.current}`}
-      >
+      <WebRTCProvider signalingUrl={`${process.env.NEXT_PUBLIC_WS_URL}/ws`}>
         <RoomContent userId={userIdRef.current} />
       </WebRTCProvider>
     </AudioProvider>
@@ -50,8 +50,8 @@ function RoomContent({ userId }: { userId: string }) {
   const audio = useAudio()
   const webrtc = useWebRTC()
 
-  const handleWebSocketMessage = (message: any) => {
-    console.log('handleWebSocketMessage', message)
+  const handleSocketMessage = (message: any) => {
+    console.log('handleSocketMessage', message)
     switch (message.type) {
       case 'room_update':
         setParticipants(message.payload.participants)
@@ -67,10 +67,10 @@ function RoomContent({ userId }: { userId: string }) {
     }
   }
 
-  const { ws, isConnected, sendMessage } = useWebSocket(
-    roomId,
+  const { socket, isConnected, sendMessage } = useSocketIO(
+    roomId as string,
     userId,
-    handleWebSocketMessage
+    handleSocketMessage
   )
 
   // Connect to WebRTC when audio is ready
@@ -96,127 +96,74 @@ function RoomContent({ userId }: { userId: string }) {
     } else {
       // 如果不是最后一个用户，直接离开
       sendMessage({ type: 'leave_room' })
-    }
-  }
-
-  const deleteRoom = async () => {
-    try {
-      // 先发送离开房间的消息
-      sendMessage({ type: 'leave_room' })
-
-      // 然后删除房间
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/rooms/${roomId}`,
-        {
-          method: 'DELETE',
-        }
-      )
-
-      if (!response.ok) {
-        throw new Error('Failed to delete room')
-      }
-
-      toast.success('Room deleted successfully')
       router.push('/')
-    } catch (error) {
-      console.error('Error deleting room:', error)
-      toast.error('Failed to delete room')
     }
   }
 
   return (
-    <div className="container mx-auto p-4">
-      <Toaster position="top-right" />
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Room: {roomId}</h1>
-        <div className="flex items-center gap-2">
-          <div
-            className={`h-3 w-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}
-          />
-          <span>{isConnected ? 'Connected' : 'Disconnected'}</span>
+    <div className="flex h-screen flex-col">
+      <header className="bg-background flex items-center justify-between border-b p-4">
+        <h1 className="text-xl font-semibold">Room: {roomId}</h1>
+        <div className="flex items-center space-x-4">
+          <AudioControl />
           <button
             onClick={leaveRoom}
-            className="rounded bg-red-500 px-4 py-2 text-white hover:bg-red-600"
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded px-4 py-2"
           >
             Leave Room
           </button>
         </div>
-      </div>
+      </header>
 
-      {/* Audio Controls */}
-      <div className="mb-4 rounded-lg bg-white p-4 shadow">
-        <h2 className="mb-2 text-xl font-semibold">Audio Controls</h2>
-        <div className="flex flex-col gap-4">
-          <AudioControl showDeviceSelector showVolumeControl />
-          <AudioStatus showDeviceInfo showMetrics />
-        </div>
-      </div>
+      <main className="flex-1 overflow-hidden">
+        <div className="grid h-full grid-cols-[1fr_300px]">
+          {/* Main content area */}
+          <div className="overflow-y-auto p-4">
+            <div className="space-y-4">
+              {transcripts.map((transcript, index) => (
+                <div
+                  key={index}
+                  className="bg-card space-y-2 rounded-lg p-4 shadow"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground text-sm">
+                      {new Date(
+                        transcript.payload.timestamp
+                      ).toLocaleTimeString()}
+                    </span>
+                    <span className="text-sm font-medium">
+                      {
+                        participants.find(
+                          (p) => p.user_id === transcript.payload.user_id
+                        )?.name
+                      }
+                    </span>
+                  </div>
+                  <p className="text-foreground">{transcript.payload.text}</p>
+                </div>
+              ))}
+            </div>
+          </div>
 
-      {/* Delete Room Modal */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-            <h2 className="mb-4 text-xl font-semibold">Delete Room</h2>
-            <p className="mb-6 text-gray-600">
-              You are the last participant in this room. Would you like to
-              delete the room?
-            </p>
-            <div className="flex justify-end gap-4">
-              <button
-                onClick={() => setShowDeleteModal(false)}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={deleteRoom}
-                className="rounded bg-red-500 px-4 py-2 text-white hover:bg-red-600"
-              >
-                Delete Room
-              </button>
+          {/* Sidebar */}
+          <div className="space-y-4 border-l p-4">
+            <h2 className="font-semibold">Participants</h2>
+            <div className="space-y-2">
+              {participants.map((participant) => (
+                <div
+                  key={participant.user_id}
+                  className="bg-card flex items-center justify-between rounded p-2"
+                >
+                  <span>{participant.name}</span>
+                  <AudioStatus />
+                </div>
+              ))}
             </div>
           </div>
         </div>
-      )}
+      </main>
 
-      {/* Add debug info */}
-      <div className="mb-2 text-xs text-gray-500">
-        Debug: isConnected = {String(isConnected)}
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div className="rounded-lg bg-white p-4 shadow">
-          <h2 className="mb-2 text-xl font-semibold">Participants</h2>
-          <ul className="space-y-2">
-            {participants.map((participant) => (
-              <li key={participant.user_id} className="flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-green-500" />
-                {participant.name}
-                {webrtc.state.peers.has(participant.user_id) && (
-                  <span className="ml-2 text-xs text-green-500">
-                    (Audio Connected)
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="rounded-lg bg-white p-4 shadow">
-          <h2 className="mb-2 text-xl font-semibold">Transcripts</h2>
-          <div className="max-h-[400px] space-y-2 overflow-y-auto">
-            {transcripts.map((transcript, index) => (
-              <div key={index} className="rounded bg-gray-50 p-2">
-                <div className="font-medium">{transcript.user_id}</div>
-                <div className="text-gray-700">{transcript.text}</div>
-                <div className="text-xs text-gray-500">
-                  {new Date(transcript.timestamp).toLocaleTimeString()}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      <Toaster />
     </div>
   )
 }

@@ -1,10 +1,9 @@
+import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import rooms, websocket
-from app.core.config import settings
-from app.core.connection_manager import manager
-import uvicorn
-import asyncio
+
+from app.api import rooms
+from app.websocket.socketio_server import app as socketio_app
 
 app = FastAPI(
     title="音频对话分析系统",
@@ -25,16 +24,13 @@ app.add_middleware(
 
 # 注册路由
 app.include_router(rooms.router, prefix="/api", tags=["rooms"])
-app.include_router(websocket.router, prefix="/api", tags=["websocket"])
+
+# 挂载 Socket.IO 应用
+app.mount("/ws", socketio_app)
 
 @app.get("/")
 async def root():
     return {"message": "音频对话分析系统 API"}
-
-@app.on_event("startup")
-async def startup_event():
-    # 启动清理任务
-    asyncio.create_task(manager.cleanup_inactive_connections())
 
 if __name__ == "__main__":
     uvicorn.run(

@@ -6,7 +6,7 @@ import React, {
   useState,
 } from 'react'
 import { WebRTCManager } from '../../lib/webrtc/connection'
-import { WebSocketSignaling } from '../../lib/webrtc/signaling'
+import { SocketIOSignaling } from '../../lib/webrtc/signaling'
 import {
   SignalingConnectionOptions,
   WebRTCContextValue,
@@ -33,7 +33,7 @@ export const WebRTCProvider: React.FC<WebRTCProviderProps> = ({
   signalingUrl,
 }) => {
   const [state, setState] = useState<WebRTCState>(initialState)
-  const [signaling, setSignaling] = useState<WebSocketSignaling | null>(null)
+  const [signaling, setSignaling] = useState<SocketIOSignaling | null>(null)
   const [rtcManager, setRtcManager] = useState<WebRTCManager | null>(null)
   const messageQueueRef = useRef<any[]>([])
   const isProcessingRef = useRef(false)
@@ -55,6 +55,52 @@ export const WebRTCProvider: React.FC<WebRTCProviderProps> = ({
     }
   }
 
+  // 处理信令消息
+  const handleSignalingMessage = async (message: any) => {
+    if (!rtcManager) return
+
+    try {
+      switch (message.type) {
+        case 'offer':
+          await rtcManager.handleOffer(
+            message.data.from_user_id,
+            message.data.sdp
+          )
+          break
+        case 'answer':
+          await rtcManager.handleAnswer(
+            message.data.from_user_id,
+            message.data.sdp
+          )
+          break
+        case 'ice_candidate':
+          await rtcManager.handleIceCandidate(
+            message.data.from_user_id,
+            message.data.candidate
+          )
+          break
+        case 'user_joined':
+          // 当新用户加入时，更新状态
+          setState((prev) => ({
+            ...prev,
+            peers: rtcManager.getPeers(),
+          }))
+          break
+        case 'user_left':
+          // 当用户离开时，清理连接
+          rtcManager.closePeerConnection(message.data.user_id)
+          setState((prev) => ({
+            ...prev,
+            peers: rtcManager.getPeers(),
+          }))
+          break
+      }
+    } catch (error) {
+      console.error('Error handling signaling message:', error)
+      setState((prev) => ({ ...prev, error: error as Error }))
+    }
+  }
+
   // 连接到房间
   const connect = async (roomId: string, userId: string) => {
     if (state.isConnecting || state.isConnected) {
@@ -72,11 +118,23 @@ export const WebRTCProvider: React.FC<WebRTCProviderProps> = ({
           messageQueueRef.current.push(message)
           processMessageQueue()
         },
-        onError: handleSignalingError,
-        onClose: handleSignalingClose,
+        onError: (error) => {
+          setState((prev) => ({
+            ...prev,
+            isConnecting: false,
+            isConnected: false,
+            error: error as Error,
+          }))
+        },
+        onClose: () => {
+          setState((prev) => ({
+            ...prev,
+            isConnected: false,
+          }))
+        },
       }
 
-      const newSignaling = new WebSocketSignaling(options)
+      const newSignaling = new SocketIOSignaling(options)
       const newRtcManager = new WebRTCManager(newSignaling)
 
       setSignaling(newSignaling)
@@ -101,99 +159,38 @@ export const WebRTCProvider: React.FC<WebRTCProviderProps> = ({
 
   // 断开连接
   const disconnect = async () => {
-    if (!state.isConnected) {
-      return
+    if (rtcManager) {
+      rtcManager.closeAllConnections()
     }
-
-    try {
-      rtcManager?.closeAllConnections()
-      await signaling?.disconnect()
-
-      setState((prev) => ({
-        ...prev,
-        isConnected: false,
-        peers: new Map(),
-      }))
-    } catch (error) {
-      console.error('断开连接失败:', error)
+    if (signaling) {
+      await signaling.disconnect()
     }
+    setState(initialState)
   }
 
-  // 设置本地流
+  // 设置本地媒体流
   const setLocalStream = (stream: MediaStream) => {
-    rtcManager?.setLocalStream(stream)
-    setState((prev) => ({ ...prev, localStream: stream }))
+    if (rtcManager) {
+      rtcManager.setLocalStream(stream)
+      setState((prev) => ({ ...prev, localStream: stream }))
+    }
   }
 
-  // 发送消息
+  // 发送消息到对等端
   const sendMessage = (peerId: string, message: any) => {
-    const peer = state.peers.get(peerId)
-    if (peer?.dataChannel?.readyState === 'open') {
-      peer.dataChannel.send(JSON.stringify(message))
+    if (rtcManager) {
+      rtcManager.sendMessage(peerId, message)
     }
   }
 
-  // 处理信令消息
-  const handleSignalingMessage = async (message: any) => {
-    if (!rtcManager) return
-
-    try {
-      switch (message.type) {
-        case 'offer':
-          await rtcManager.handleOffer(message.data.peerId, message.data.sdp)
-          break
-        case 'answer':
-          await rtcManager.handleAnswer(message.data.peerId, message.data.sdp)
-          break
-        case 'ice_candidate':
-          await rtcManager.handleIceCandidate(
-            message.data.peerId,
-            message.data.candidate
-          )
-          break
-        case 'peer_join':
-          const peer = await rtcManager.createPeerConnection(
-            message.data.peerId
-          )
-          setState((prev) => ({
-            ...prev,
-            peers: new Map(prev.peers).set(message.data.peerId, peer),
-          }))
-          await rtcManager.createOffer(message.data.peerId)
-          break
-        case 'peer_leave':
-          rtcManager.closePeerConnection(message.data.peerId)
-          setState((prev) => {
-            const newPeers = new Map(prev.peers)
-            newPeers.delete(message.data.peerId)
-            return { ...prev, peers: newPeers }
-          })
-          break
-      }
-    } catch (error) {
-      console.error('处理信令消息失败:', error)
-    }
-  }
-
-  // 处理信令错误
-  const handleSignalingError = (error: Error) => {
-    console.error('信令错误:', error)
-    setState((prev) => ({ ...prev, error }))
-  }
-
-  // 处理信令关闭
-  const handleSignalingClose = () => {
-    setState((prev) => ({ ...prev, isConnected: false }))
-  }
-
-  // 清理
+  // 清理函数
   useEffect(() => {
     return () => {
       disconnect()
     }
   }, [])
 
-  const contextValue: WebRTCContextValue = {
+  const value: WebRTCContextValue = {
     state,
     actions: {
       connect,
@@ -204,9 +201,7 @@ export const WebRTCProvider: React.FC<WebRTCProviderProps> = ({
   }
 
   return (
-    <WebRTCContext.Provider value={contextValue}>
-      {children}
-    </WebRTCContext.Provider>
+    <WebRTCContext.Provider value={value}>{children}</WebRTCContext.Provider>
   )
 }
 
