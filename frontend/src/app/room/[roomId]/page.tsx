@@ -63,7 +63,9 @@ export default function RoomPage() {
 
   return (
     <AudioProvider>
-      <WebRTCProvider signalingUrl={`${process.env.NEXT_PUBLIC_WS_URL}/ws`}>
+      <WebRTCProvider
+        signalingUrl={`${process.env.NEXT_PUBLIC_WS_URL}/socket.io`}
+      >
         <RoomContent userId={userId} userName={userName} />
       </WebRTCProvider>
     </AudioProvider>

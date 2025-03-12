@@ -76,6 +76,8 @@ export default function Home() {
         throw new Error('创建会议失败')
       }
 
+      console.log('创建会议响应:', response)
+
       const { room } = await response.json()
 
       // 标记为房主

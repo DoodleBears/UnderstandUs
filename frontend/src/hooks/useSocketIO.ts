@@ -51,10 +51,6 @@ export const useSocketIO = (
       path: '/socket.io',
       timeout: 20000,
       forceNew: false,
-      query: {
-        roomId: roomRef.current,
-        userId: userIdRef.current,
-      },
     })
 
     const joinRoom = () => {

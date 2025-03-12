@@ -17,6 +17,7 @@ class CreateRoomResponse(BaseModel):
 
 @router.post("/rooms", response_model=CreateRoomResponse)
 async def create_room(request: CreateRoomRequest):
+    print(f"创建房间请求: {request}")
     # 生成一个简单的用户ID（实际应用中应该使用认证系统）
     host_id = request.host_id
     
@@ -24,6 +25,9 @@ async def create_room(request: CreateRoomRequest):
         name=request.name,
         host_id=host_id,
     )
+    
+    if not room:
+        raise HTTPException(status_code=500, detail="Failed to create room")
     
     return CreateRoomResponse(room=room)
 

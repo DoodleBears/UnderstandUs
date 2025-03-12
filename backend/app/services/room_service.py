@@ -1,10 +1,12 @@
 import asyncio
+import logging
 import uuid
 from datetime import datetime
 from typing import Dict, List, Optional
 
 from app.models.room import Participant, Room
 
+logger = logging.getLogger(__name__)
 
 class RoomService:
     def __init__(self):
@@ -34,7 +36,9 @@ class RoomService:
 
     async def get_room(self, room_id: str) -> Optional[Room]:
         async with self._global_lock:
-            return self.rooms.get(room_id)
+            room = self.rooms.get(room_id)
+            logger.warning(f"获取房间信息: room_id={room_id}, exists={'是' if room else '否'}")
+            return room
 
     async def list_rooms(self) -> List[Room]:
         async with self._global_lock:

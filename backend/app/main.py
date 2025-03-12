@@ -26,7 +26,7 @@ app.add_middleware(
 app.include_router(rooms.router, prefix="/api", tags=["rooms"])
 
 # 挂载 Socket.IO 应用
-app.mount("/", socketio_app)
+app.mount("/socket.io", socketio_app)
 
 @app.get("/")
 async def root():

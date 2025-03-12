@@ -26,19 +26,38 @@ export class SocketIOSignaling implements SignalingConnection {
 
     return new Promise((resolve, reject) => {
       try {
+        console.log('开始建立信令连接')
         this._state = 'connecting'
-        this._socket = io(this._options.url, {
-          transports: ['websocket'],
+        this._socket = io(process.env.NEXT_PUBLIC_WS_URL || '', {
+          transports: ['websocket', 'polling'],
           autoConnect: true,
           reconnection: true,
           reconnectionAttempts: 5,
           reconnectionDelay: 1000,
+          path: '/socket.io',
+          timeout: 20000,
+          forceNew: false,
+        })
+
+        // 添加连接事件监听
+        this._socket.on('connect_error', (error) => {
+          console.error('连接错误详情:', error)
+          this._state = 'error'
+          this._options.onError?.(error)
+        })
+
+        this._socket.on('connect_timeout', (timeout) => {
+          console.error('连接超时:', timeout)
+          this._state = 'error'
+          this._options.onError?.(new Error('Connection timeout'))
         })
 
         this._socket.on('connect', () => {
+          console.log('Socket.IO连接已建立，socket id:', this._socket?.id)
           this._state = 'connected'
 
           // 发送加入房间消息
+          console.log('发送加入房间请求:', this._options.roomId)
           this._socket?.emit('join_room', {
             room_id: this._options.roomId,
             user_id: this._options.userId,
@@ -47,17 +66,14 @@ export class SocketIOSignaling implements SignalingConnection {
           resolve()
         })
 
-        this._socket.on('disconnect', () => {
+        this._socket.on('disconnect', (reason) => {
+          console.log('Socket.IO连接已断开，原因:', reason)
           this._state = 'disconnected'
           this._options.onClose?.()
         })
 
-        this._socket.on('connect_error', (error) => {
-          this._state = 'error'
-          this._options.onError?.(error)
-        })
-
         this._socket.on('error', (error) => {
+          console.error('Socket.IO错误:', error)
           this._state = 'error'
           this._options.onError?.(error)
         })
@@ -73,6 +89,7 @@ export class SocketIOSignaling implements SignalingConnection {
         ] as const
         messageTypes.forEach((type) => {
           this._socket?.on(type, (data) => {
+            console.log(`收到${type}消息:`, data)
             this._options.onMessage?.({
               type,
               data,
@@ -80,6 +97,7 @@ export class SocketIOSignaling implements SignalingConnection {
           })
         })
       } catch (error) {
+        console.error('建立信令连接失败:', error)
         this._state = 'error'
         reject(error)
       }
@@ -115,7 +133,8 @@ export class SocketIOSignaling implements SignalingConnection {
         this._socket?.emit(message.type, {
           ...message.data,
           room_id: this._options.roomId,
-          user_id: this._options.userId,
+          from_user_id: this._options.userId,
+          target_user_id: message.data.peerId,
         })
         resolve()
       } catch (error) {
