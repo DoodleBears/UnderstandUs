@@ -134,11 +134,11 @@ async def join_room(sid, data):
             'room_id': room_id
         }, room=room_id)
         
-        # 发送房间信息给新用户
+        # 发送房间信息给所有用户
         await sio.emit('room_info', {
             'room_id': room_id,
             'participants': participants
-        }, room=sid)
+        }, room=room_id)
         
     except Exception as e:
         logger.error(f"Error in join_room: {str(e)}")

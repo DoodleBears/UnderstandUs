@@ -1,6 +1,8 @@
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List
+
 from pydantic import BaseModel, Field
+
 
 class Participant(BaseModel):
     user_id: str
@@ -14,6 +16,7 @@ class Room(BaseModel):
     created_at: datetime = Field(default_factory=datetime.now)
     participants: Dict[str, Participant] = Field(default_factory=dict)
     transcripts: List[Dict] = Field(default_factory=list)
+    host_id: str
     is_active: bool = True
 
     class Config:

@@ -1,14 +1,16 @@
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 from typing import List
+
 from app.models.room import Room
 from app.services.room_service import room_service
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 router = APIRouter()
 
 class CreateRoomRequest(BaseModel):
     name: str
     host_name: str
+    host_id: str
 
 class CreateRoomResponse(BaseModel):
     room: Room
@@ -16,12 +18,11 @@ class CreateRoomResponse(BaseModel):
 @router.post("/rooms", response_model=CreateRoomResponse)
 async def create_room(request: CreateRoomRequest):
     # 生成一个简单的用户ID（实际应用中应该使用认证系统）
-    host_id = f"user_{len(await room_service.list_rooms()) + 1}"
+    host_id = request.host_id
     
     room = await room_service.create_room(
         name=request.name,
         host_id=host_id,
-        host_name=request.host_name
     )
     
     return CreateRoomResponse(room=room)

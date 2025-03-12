@@ -19,19 +19,14 @@ class RoomService:
                 self._locks[room_id] = asyncio.Lock()
             return self._locks[room_id]
 
-    async def create_room(self, name: str, host_id: str, host_name: str) -> Room:
+    async def create_room(self, name: str, host_id: str) -> Room:
         async with self._global_lock:
             room_id = str(uuid.uuid4())[:8]
             room = Room(
                 id=room_id,
                 name=name,
-                participants={
-                    host_id: Participant(
-                        user_id=host_id,
-                        name=host_name,
-                        is_host=True
-                    )
-                }
+                host_id=host_id,
+                participants={}
             )
             self.rooms[room_id] = room
             self._locks[room_id] = asyncio.Lock()

@@ -5,13 +5,16 @@ import { io, Socket } from 'socket.io-client'
 export const useSocketIO = (
   roomId: string | undefined,
   userId: string,
+  userName: string,
   onMessage?: (message: any) => void
 ) => {
   const socketRef = useRef<Socket | null>(null)
   const [isConnected, setIsConnected] = useState(false)
   const isInitializedRef = useRef(false)
+  const hasJoinedRoomRef = useRef(false)
   const roomRef = useRef(roomId)
   const userIdRef = useRef(userId)
+  const userNameRef = useRef(userName)
   const onMessageRef = useRef(onMessage)
 
   // Update refs when props change
@@ -54,6 +57,22 @@ export const useSocketIO = (
       },
     })
 
+    const joinRoom = () => {
+      if (!hasJoinedRoomRef.current && socket.connected) {
+        console.log('Joining room...', {
+          roomId: roomRef.current,
+          userId: userIdRef.current,
+          userName: userNameRef.current,
+        })
+        socket.emit('join_room', {
+          room_id: roomRef.current,
+          user_id: userIdRef.current,
+          user_name: userNameRef.current,
+        })
+        hasJoinedRoomRef.current = true
+      }
+    }
+
     const setupSocketListeners = () => {
       socket.on('connect', () => {
         console.log('Socket.IO connected successfully', {
@@ -62,14 +81,7 @@ export const useSocketIO = (
         })
         setIsConnected(true)
         toast.success('Connected to room')
-
-        // Join room only if not already in the room
-        if (socket.connected) {
-          socket.emit('join_room', {
-            room_id: roomRef.current,
-            user_id: userIdRef.current,
-          })
-        }
+        joinRoom()
       })
 
       socket.on('connect_error', (error) => {
@@ -78,6 +90,7 @@ export const useSocketIO = (
           details: error,
         })
         setIsConnected(false)
+        hasJoinedRoomRef.current = false
         toast.error(`Connection error: ${error.message}`)
       })
 
@@ -88,6 +101,7 @@ export const useSocketIO = (
           id: socket.id,
         })
         setIsConnected(false)
+        hasJoinedRoomRef.current = false
 
         // Don't show error toast for client-initiated disconnects
         if (!reason.includes('client')) {
@@ -106,19 +120,39 @@ export const useSocketIO = (
       })
 
       // Room events
+      socket.on('join_room_success', (data) => {
+        console.log('Successfully joined room:', data)
+        // Request latest room info after joining
+        socket.emit('get_room_info', {
+          room_id: roomRef.current,
+          user_id: userIdRef.current,
+        })
+      })
+
       socket.on('user_joined', (data) => {
         if (data.user_id !== userIdRef.current) {
           handleMessage('user_joined', data)
+          // Request updated room info when someone joins
+          socket.emit('get_room_info', {
+            room_id: roomRef.current,
+            user_id: userIdRef.current,
+          })
         }
       })
 
       socket.on('user_left', (data) => {
         if (data.user_id !== userIdRef.current) {
           handleMessage('user_left', data)
+          // Request updated room info when someone leaves
+          socket.emit('get_room_info', {
+            room_id: roomRef.current,
+            user_id: userIdRef.current,
+          })
         }
       })
 
       socket.on('room_info', (data) => {
+        console.log('Received room info:', data)
         handleMessage('room_update', data)
       })
 
@@ -152,9 +186,10 @@ export const useSocketIO = (
       socket.disconnect()
       socketRef.current = null
       isInitializedRef.current = false
+      hasJoinedRoomRef.current = false
       setIsConnected(false)
     }
-  }, [roomId, handleMessage]) // Only depend on roomId and memoized handler
+  }, [roomId, handleMessage])
 
   const sendMessage = useCallback(
     (message: any) => {

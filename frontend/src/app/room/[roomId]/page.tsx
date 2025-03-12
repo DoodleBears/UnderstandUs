@@ -4,10 +4,13 @@ import { AudioControl } from '@/components/audio/AudioControl'
 import { AudioProvider } from '@/components/audio/AudioProvider'
 import { AudioStatus } from '@/components/audio/AudioStatus'
 import { useAudio } from '@/components/audio/useAudio'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { useWebRTC, WebRTCProvider } from '@/components/webrtc/WebRTCProvider'
 import { useSocketIO } from '@/hooks/useSocketIO'
 import { useParams, useRouter } from 'next/navigation'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Toaster } from 'react-hot-toast'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -29,18 +32,52 @@ interface Transcript {
 
 export default function RoomPage() {
   const { roomId } = useParams()
-  const userIdRef = useRef<string>(uuidv4())
+  const [userId, setUserId] = useState('')
+  const [userName, setUserName] = useState('')
+
+  useEffect(() => {
+    // Load user ID and name from localStorage
+    const savedUserId = localStorage.getItem('userId')
+    const savedUserName = localStorage.getItem('userName')
+
+    if (!savedUserId || !savedUserName) {
+      // If no user info, generate random ones
+      const newUserId = uuidv4()
+      const newUserName = `用户${newUserId.slice(0, 4)}`
+      setUserId(newUserId)
+      setUserName(newUserName)
+      localStorage.setItem('userId', newUserId)
+      localStorage.setItem('userName', newUserName)
+    } else {
+      setUserId(savedUserId)
+      setUserName(savedUserName)
+    }
+  }, [])
+
+  if (!userId || !userName) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        Loading...
+      </div>
+    )
+  }
 
   return (
     <AudioProvider>
       <WebRTCProvider signalingUrl={`${process.env.NEXT_PUBLIC_WS_URL}/ws`}>
-        <RoomContent userId={userIdRef.current} />
+        <RoomContent userId={userId} userName={userName} />
       </WebRTCProvider>
     </AudioProvider>
   )
 }
 
-function RoomContent({ userId }: { userId: string }) {
+function RoomContent({
+  userId,
+  userName,
+}: {
+  userId: string
+  userName: string
+}) {
   const { roomId } = useParams()
   const router = useRouter()
   const [participants, setParticipants] = useState<Participant[]>([])
@@ -70,8 +107,21 @@ function RoomContent({ userId }: { userId: string }) {
   const { socket, isConnected, sendMessage } = useSocketIO(
     roomId as string,
     userId,
+    userName,
     handleSocketMessage
   )
+
+  // Send user info when connected
+  useEffect(() => {
+    if (isConnected) {
+      sendMessage({
+        type: 'user_info',
+        data: {
+          name: userName,
+        },
+      })
+    }
+  }, [isConnected, userName])
 
   // Connect to WebRTC when audio is ready
   useEffect(() => {
@@ -102,66 +152,90 @@ function RoomContent({ userId }: { userId: string }) {
 
   return (
     <div className="flex h-screen flex-col">
-      <header className="bg-background flex items-center justify-between border-b p-4">
-        <h1 className="text-xl font-semibold">Room: {roomId}</h1>
-        <div className="flex items-center space-x-4">
-          <AudioControl />
-          <button
+      {/* Top Header */}
+      <header className="bg-background border-b px-4 py-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <h1 className="text-lg font-semibold">Room ID: {roomId}</h1>
+          </div>
+          <Button
+            variant="destructive"
             onClick={leaveRoom}
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded px-4 py-2"
+            className="shrink-0"
           >
             Leave Room
-          </button>
+          </Button>
         </div>
       </header>
 
-      <main className="flex-1 overflow-hidden">
-        <div className="grid h-full grid-cols-[1fr_300px]">
-          {/* Main content area */}
-          <div className="overflow-y-auto p-4">
-            <div className="space-y-4">
-              {transcripts.map((transcript, index) => (
-                <div
-                  key={index}
-                  className="bg-card space-y-2 rounded-lg p-4 shadow"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground text-sm">
-                      {new Date(
-                        transcript.payload.timestamp
-                      ).toLocaleTimeString()}
-                    </span>
-                    <span className="text-sm font-medium">
-                      {
-                        participants.find(
-                          (p) => p.user_id === transcript.payload.user_id
-                        )?.name
-                      }
-                    </span>
-                  </div>
-                  <p className="text-foreground">{transcript.payload.text}</p>
+      {/* Main Content */}
+      <div className="flex-1 overflow-hidden p-4">
+        <div className="grid h-full grid-cols-[300px_1fr] gap-4">
+          {/* Participants Panel */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Participants ({participants.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-[calc(100vh-280px)]">
+                <div className="space-y-2">
+                  {participants.map((participant) => (
+                    <div
+                      key={participant.user_id}
+                      className="flex items-center justify-between rounded-lg border p-2"
+                    >
+                      <span className="font-medium">{participant.name}</span>
+                      <AudioStatus />
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
+              </ScrollArea>
+            </CardContent>
+          </Card>
 
-          {/* Sidebar */}
-          <div className="space-y-4 border-l p-4">
-            <h2 className="font-semibold">Participants</h2>
-            <div className="space-y-2">
-              {participants.map((participant) => (
-                <div
-                  key={participant.user_id}
-                  className="bg-card flex items-center justify-between rounded p-2"
-                >
-                  <span>{participant.name}</span>
-                  <AudioStatus />
+          {/* Transcripts Panel */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Transcripts</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-[calc(100vh-280px)]">
+                <div className="space-y-4">
+                  {transcripts.map((transcript, index) => (
+                    <div key={index} className="rounded-lg border p-4">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          {new Date(
+                            transcript.payload.timestamp
+                          ).toLocaleTimeString()}
+                        </span>
+                        <span className="font-medium">
+                          {
+                            participants.find(
+                              (p) => p.user_id === transcript.payload.user_id
+                            )?.name
+                          }
+                        </span>
+                      </div>
+                      <p className="mt-2">{transcript.payload.text}</p>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
+              </ScrollArea>
+            </CardContent>
+          </Card>
         </div>
-      </main>
+      </div>
+
+      {/* Bottom Audio Controls */}
+      <div className="bg-background border-t px-4 py-3">
+        <div className="flex items-center justify-center">
+          <AudioControl
+            showDeviceSelector={false}
+            className="flex-row items-center gap-4"
+          />
+        </div>
+      </div>
 
       <Toaster />
     </div>
