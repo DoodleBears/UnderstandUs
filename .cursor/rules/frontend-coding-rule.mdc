@@ -1,0 +1,14 @@
+---
+description: Frontend Development Best Practice
+globs: frontend/**/*.{ts,tsx,js,jsx}
+alwaysApply: false
+---
+# Frontend Development Rules
+
+## File Addition Guidelines
+
+When adding or updating new files to the project, you MUST
+
+- Follow Naming Conventions ([NAMING_CONVENTIONS.md](mdc:frontend/docs/NAMING_CONVENTIONS.md))
+- Follow State Management Rules ([STATE_MANAGEMENT.md](mdc:frontend/docs/STATE_MANAGEMENT.md))
+- Update [FILE_FUNCTIONALITY.md](mdc:frontend/docs/FILE_FUNCTIONALITY.md)
