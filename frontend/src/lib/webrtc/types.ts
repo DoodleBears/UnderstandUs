@@ -6,7 +6,17 @@ export interface PeerConnection {
 }
 
 export interface SignalingMessage {
-  type: 'join' | 'leave' | 'offer' | 'answer' | 'ice_candidate'
+  type:
+    | 'join_room'
+    | 'user_joined'
+    | 'leave_room'
+    | 'user_left'
+    | 'offer'
+    | 'answer'
+    | 'ice_candidate'
+    | 'heartbeat'
+    | 'heartbeat_ack'
+    | 'room_update'
   data: any
 }
 

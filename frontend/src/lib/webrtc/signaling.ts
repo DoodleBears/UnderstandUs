@@ -12,6 +12,7 @@ export class WebSocketSignaling implements SignalingConnection {
   private _reconnectAttempts = 0
   private _maxReconnectAttempts = 5
   private _reconnectTimeout = 1000 // 初始重连等待时间（毫秒）
+  private _heartbeatInterval: NodeJS.Timeout | null = null
 
   constructor(options: SignalingConnectionOptions) {
     this._options = options
@@ -19,6 +20,27 @@ export class WebSocketSignaling implements SignalingConnection {
 
   get state(): SignalingConnectionState {
     return this._state
+  }
+
+  private _startHeartbeat() {
+    if (this._heartbeatInterval) {
+      clearInterval(this._heartbeatInterval)
+    }
+    this._heartbeatInterval = setInterval(() => {
+      if (this._ws?.readyState === WebSocket.OPEN) {
+        this.send({
+          type: 'heartbeat',
+          data: {},
+        })
+      }
+    }, 30000) // Send heartbeat every 30 seconds
+  }
+
+  private _stopHeartbeat() {
+    if (this._heartbeatInterval) {
+      clearInterval(this._heartbeatInterval)
+      this._heartbeatInterval = null
+    }
   }
 
   async connect(): Promise<void> {
@@ -38,12 +60,15 @@ export class WebSocketSignaling implements SignalingConnection {
 
           // 发送加入房间消息
           this.send({
-            type: 'join',
+            type: 'join_room',
             data: {
               roomId: this._options.roomId,
               userId: this._options.userId,
             },
           })
+
+          // 启动心跳
+          this._startHeartbeat()
 
           resolve()
         }
@@ -59,12 +84,13 @@ export class WebSocketSignaling implements SignalingConnection {
 
         this._ws.onerror = (error) => {
           this._state = 'error'
-          this._options.onError?.(error as Error)
+          this._options.onError?.(error as unknown as Error)
           this._attemptReconnect()
         }
 
         this._ws.onclose = () => {
           this._state = 'disconnected'
+          this._stopHeartbeat()
           this._options.onClose?.()
           this._attemptReconnect()
         }
@@ -83,13 +109,14 @@ export class WebSocketSignaling implements SignalingConnection {
     return new Promise((resolve) => {
       // 发送离开房间消息
       this.send({
-        type: 'leave',
+        type: 'leave_room',
         data: {
           roomId: this._options.roomId,
           userId: this._options.userId,
         },
       })
 
+      this._stopHeartbeat()
       this._ws?.close()
       this._ws = null
       this._state = 'disconnected'

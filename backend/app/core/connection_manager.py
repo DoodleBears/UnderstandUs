@@ -1,10 +1,14 @@
-import json
-from typing import Dict, Set, List, Optional
+import asyncio
+import logging
+from datetime import datetime
+from typing import Dict, List
 
 from fastapi import WebSocket
+
 from app.services.room_service import room_service
-import asyncio
-from datetime import datetime
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 class ConnectionManager:
     def __init__(self):
@@ -47,54 +51,84 @@ class ConnectionManager:
         
         # 更新房间参与者
         await self.room_service.add_participant(room_id, user_id, user_name)
+        logger.warning(f"Room {room_id} has {len(self.active_connections[room_id])} connections")
     
     async def disconnect(self, websocket: WebSocket, room_id: str, user_id: str):
+        logger.warning(f"Disconnecting user {user_id} from room {room_id}")
+        
         # 从房间连接中移除
         if room_id in self.active_connections:
             self.active_connections[room_id].pop(user_id, None)
             if not self.active_connections[room_id]:
                 del self.active_connections[room_id]
+                logger.warning(f"Room {room_id} is now empty, removing from active connections")
 
         # 清理用户相关数据
         self.user_rooms.pop(user_id, None)
         self.last_activity.pop(user_id, None)
 
-        # 广播房间更新
-        if room_id in self.active_connections:
-            await self.broadcast_room_update(room_id)
-
         # 更新房间参与者
         room = await self.room_service.remove_participant(room_id, user_id)
         if room:
-            # 广播参与者离开消息
-            await self.broadcast_room_update(room_id)
+            # 只有在房间还有参与者时才广播更新
+            if room_id in self.active_connections and self.active_connections[room_id]:
+                logger.warning(f"Broadcasting room update after user {user_id} disconnected")
+                await self.broadcast_room_update(room_id)
+            else:
+                logger.warning(f"No active connections in room {room_id} after user {user_id} disconnected")
     
     async def broadcast_room_update(self, room_id: str):
         """广播房间状态更新"""
         if room_id not in self.active_connections:
+            logger.warning(f"Room {room_id} not found in active connections")
             return
             
+        room_connections = len(self.active_connections[room_id])
+        logger.warning(f"Broadcasting room update for room {room_id}, room connections: {room_connections}")
+            
         # 获取房间所有参与者
-        participants = [
-            {"id": user_id, "name": f"用户 {i+1}"}
-            for i, user_id in enumerate(self.active_connections[room_id].keys())
-        ]
+        user_ids = list(self.active_connections[room_id].keys())
+        participants = []
+        
+        # 确保主持人始终是第一个
+        for i, user_id in enumerate(user_ids):
+            if i == 0:  # 第一个用户是主持人
+                participants.append({
+                    "user_id": user_id,
+                    "name": "主持人",
+                    "joined_at": self.last_activity[user_id].isoformat(),
+                    "is_host": True
+                })
+            else:  # 其他用户是参与者
+                participants.append({
+                    "user_id": user_id,
+                    "name": f"参与者 {i}",
+                    "joined_at": self.last_activity[user_id].isoformat(),
+                    "is_host": False
+                })
 
         # 广播房间更新消息
         message = {
             "type": "room_update",
             "payload": {
-                "room_id": room_id,
-                "participants": participants,
-                "timestamp": datetime.now().isoformat()
+                "participants": participants
             }
         }
+        logger.warning(f"Room update message: {message}")
         
-        for websocket in self.active_connections[room_id].values():
+        failed_connections = []
+        for user_id, websocket in list(self.active_connections[room_id].items()):
+            logger.warning(f"Sending room update to user {user_id} in room {room_id}")
             try:
                 await websocket.send_json(message)
+                logger.warning(f"Successfully sent room update to user {user_id} in room {room_id}")
             except Exception as e:
-                print(f"Error broadcasting room update: {e}")
+                logger.error(f"Failed to send room update to user {user_id} in room {room_id}: {str(e)}")
+                failed_connections.append((user_id, websocket))
+        
+        # 清理失败的连接
+        for user_id, websocket in failed_connections:
+            await self.disconnect(websocket, room_id, user_id)
     
     async def broadcast_transcript(self, room_id: str, user_id: str, text: str, is_final: bool = False):
         """广播转录文本"""
@@ -118,11 +152,21 @@ class ConnectionManager:
         if room_id not in self.active_connections:
             return
             
-        for connection in self.active_connections[room_id].values():
+        connections_count = len(self.active_connections[room_id])
+        logger.info(f"Broadcasting message to room {room_id} with {connections_count} connections")
+        
+        failed_connections = []
+        for user_id, websocket in list(self.active_connections[room_id].items()):
             try:
-                await connection.send_text(json.dumps(message))
-            except:
-                pass
+                await websocket.send_json(message)
+                logger.debug(f"Successfully sent message to user {user_id} in room {room_id}")
+            except Exception as e:
+                logger.error(f"Failed to send message to user {user_id} in room {room_id}: {str(e)}")
+                failed_connections.append((user_id, websocket))
+        
+        # 清理失败的连接
+        for user_id, websocket in failed_connections:
+            await self.disconnect(websocket, room_id, user_id)
 
     def update_activity(self, user_id: str):
         if user_id in self.last_activity:
@@ -154,9 +198,26 @@ class ConnectionManager:
         if room_id not in self.active_connections:
             return []
         
-        return [
-            {"id": user_id, "name": f"用户 {i+1}"}
-            for i, user_id in enumerate(self.active_connections[room_id].keys())
-        ]
+        user_ids = list(self.active_connections[room_id].keys())
+        participants = []
+        
+        # 确保主持人始终是第一个
+        for i, user_id in enumerate(user_ids):
+            if i == 0:  # 第一个用户是主持人
+                participants.append({
+                    "user_id": user_id,
+                    "name": "主持人",
+                    "joined_at": self.last_activity[user_id].isoformat(),
+                    "is_host": True
+                })
+            else:  # 其他用户是参与者
+                participants.append({
+                    "user_id": user_id,
+                    "name": f"参与者 {i}",
+                    "joined_at": self.last_activity[user_id].isoformat(),
+                    "is_host": False
+                })
+        
+        return participants
 
 manager = ConnectionManager() 

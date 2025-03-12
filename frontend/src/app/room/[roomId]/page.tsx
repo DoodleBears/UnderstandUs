@@ -5,13 +5,17 @@ import { AudioProvider } from '@/components/audio/AudioProvider'
 import { AudioStatus } from '@/components/audio/AudioStatus'
 import { useAudio } from '@/components/audio/useAudio'
 import { useWebRTC, WebRTCProvider } from '@/components/webrtc/WebRTCProvider'
+import { useWebSocket } from '@/hooks/useWebSocket'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { toast, Toaster } from 'react-hot-toast'
+import { v4 as uuidv4 } from 'uuid'
 
 interface Participant {
-  id: string
+  user_id: string
   name: string
+  joined_at: string
+  is_host: boolean
 }
 
 interface Transcript {
@@ -23,140 +27,31 @@ interface Transcript {
 
 export default function RoomPage() {
   const { roomId } = useParams()
-
+  const userIdRef = useRef<string>(uuidv4())
   // Wrap the actual content in providers
   return (
     <AudioProvider>
-      <WebRTCProvider signalingUrl={`ws://127.0.0.1:8000/api/ws/rtc/${roomId}`}>
-        <RoomContent />
+      <WebRTCProvider
+        signalingUrl={`${process.env.NEXT_PUBLIC_WS_URL}/api/ws/room/${roomId}/user/${userIdRef.current}`}
+      >
+        <RoomContent userId={userIdRef.current} />
       </WebRTCProvider>
     </AudioProvider>
   )
 }
 
-function RoomContent() {
+function RoomContent({ userId }: { userId: string }) {
   const { roomId } = useParams()
   const router = useRouter()
   const [participants, setParticipants] = useState<Participant[]>([])
   const [transcripts, setTranscripts] = useState<Transcript[]>([])
-  const [isConnected, setIsConnected] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const wsRef = useRef<WebSocket | null>(null)
-  const heartbeatIntervalRef = useRef<NodeJS.Timeout | undefined>(undefined)
-  const lastHeartbeatRef = useRef<number>(Date.now())
 
   const audio = useAudio()
   const webrtc = useWebRTC()
 
-  // Connect to WebRTC when audio is ready
-  useEffect(() => {
-    if (audio.isReady && audio.state.stream && roomId) {
-      webrtc.actions.connect(
-        roomId as string,
-        'user-' + Math.random().toString(36).substr(2, 9)
-      )
-      webrtc.actions.setLocalStream(audio.state.stream)
-    }
-  }, [audio.isReady, audio.state.stream, roomId])
-
-  // Add effect to log isConnected changes
-  useEffect(() => {
-    console.log('isConnected state changed:', isConnected)
-  }, [isConnected])
-
-  useEffect(() => {
-    if (!roomId) return
-
-    const connectWebSocket = () => {
-      console.log('Attempting to connect to WebSocket...')
-      const ws = new WebSocket(`ws://127.0.0.1:8000/api/ws/room/${roomId}`)
-      console.log('WebSocket created with URL:', ws.url)
-      console.log('Initial readyState:', ws.readyState)
-
-      // Add connection timeout
-      const connectionTimeout = setTimeout(() => {
-        if (ws.readyState !== WebSocket.OPEN) {
-          console.log('Connection timeout')
-          ws.close()
-        }
-      }, 5000)
-
-      ws.onopen = () => {
-        console.log('WebSocket connected successfully')
-        clearTimeout(connectionTimeout)
-        setIsConnected(true)
-        console.log('Setting isConnected to true')
-        startHeartbeat(ws)
-        toast.success('Connected to room')
-      }
-
-      ws.onclose = (event) => {
-        console.log(
-          'WebSocket closed with code:',
-          event.code,
-          'reason:',
-          event.reason,
-          'wasClean:',
-          event.wasClean
-        )
-        setIsConnected(false)
-        console.log('Setting isConnected to false')
-        stopHeartbeat()
-        clearTimeout(connectionTimeout)
-
-        // Show more specific error messages
-        if (event.code === 1006) {
-          toast.error(
-            'Connection failed. Please check if the room exists and the server is running.'
-          )
-        } else {
-          toast.error(
-            `Disconnected from room: ${event.reason || 'Unknown reason'}`
-          )
-        }
-      }
-
-      ws.onerror = (error) => {
-        console.error('WebSocket error:', error)
-        console.log('Current readyState:', ws.readyState)
-        clearTimeout(connectionTimeout)
-        toast.error('Connection error')
-      }
-
-      ws.onmessage = (event) => {
-        console.log('Received message:', event.data)
-        const message = JSON.parse(event.data)
-        handleWebSocketMessage(message)
-      }
-
-      wsRef.current = ws
-    }
-
-    connectWebSocket()
-
-    return () => {
-      if (wsRef.current) {
-        wsRef.current.close()
-      }
-      stopHeartbeat()
-    }
-  }, [roomId])
-
-  const startHeartbeat = (ws: WebSocket) => {
-    heartbeatIntervalRef.current = setInterval(() => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'heartbeat' }))
-      }
-    }, 30000) // Send heartbeat every 30 seconds
-  }
-
-  const stopHeartbeat = () => {
-    if (heartbeatIntervalRef.current) {
-      clearInterval(heartbeatIntervalRef.current)
-    }
-  }
-
   const handleWebSocketMessage = (message: any) => {
+    console.log('handleWebSocketMessage', message)
     switch (message.type) {
       case 'room_update':
         setParticipants(message.payload.participants)
@@ -167,11 +62,29 @@ function RoomContent() {
         console.log('transcript', message)
         break
       case 'heartbeat_ack':
-        lastHeartbeatRef.current = Date.now()
         console.log('heartbeat_ack', message)
         break
     }
   }
+
+  const { ws, isConnected, sendMessage } = useWebSocket(
+    roomId,
+    userId,
+    handleWebSocketMessage
+  )
+
+  // Connect to WebRTC when audio is ready
+  useEffect(() => {
+    if (audio.isReady && audio.state.stream && roomId) {
+      webrtc.actions.connect(roomId as string, userId)
+      webrtc.actions.setLocalStream(audio.state.stream)
+    }
+  }, [audio.isReady, audio.state.stream, roomId])
+
+  // Add effect to log isConnected changes
+  useEffect(() => {
+    console.log('isConnected state changed:', isConnected)
+  }, [isConnected])
 
   const leaveRoom = () => {
     // Disconnect WebRTC
@@ -182,24 +95,18 @@ function RoomContent() {
       setShowDeleteModal(true)
     } else {
       // 如果不是最后一个用户，直接离开
-      if (wsRef.current) {
-        wsRef.current.send(JSON.stringify({ type: 'leave_room' }))
-        wsRef.current.close()
-      }
+      sendMessage({ type: 'leave_room' })
     }
   }
 
   const deleteRoom = async () => {
     try {
       // 先发送离开房间的消息
-      if (wsRef.current) {
-        wsRef.current.send(JSON.stringify({ type: 'leave_room' }))
-        wsRef.current.close()
-      }
+      sendMessage({ type: 'leave_room' })
 
       // 然后删除房间
       const response = await fetch(
-        `http://127.0.0.1:8000/api/rooms/${roomId}`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/rooms/${roomId}`,
         {
           method: 'DELETE',
         }
@@ -282,10 +189,10 @@ function RoomContent() {
           <h2 className="mb-2 text-xl font-semibold">Participants</h2>
           <ul className="space-y-2">
             {participants.map((participant) => (
-              <li key={participant.id} className="flex items-center gap-2">
+              <li key={participant.user_id} className="flex items-center gap-2">
                 <div className="h-2 w-2 rounded-full bg-green-500" />
                 {participant.name}
-                {webrtc.state.peers.has(participant.id) && (
+                {webrtc.state.peers.has(participant.user_id) && (
                   <span className="ml-2 text-xs text-green-500">
                     (Audio Connected)
                   </span>

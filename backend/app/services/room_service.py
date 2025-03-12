@@ -1,9 +1,10 @@
+import asyncio
 import uuid
 from datetime import datetime
 from typing import Dict, List, Optional
-import asyncio
 
 from app.models.room import Participant, Room
+
 
 class RoomService:
     def __init__(self):
@@ -62,10 +63,18 @@ class RoomService:
             if room and user_id in room.participants:
                 del room.participants[user_id]
                 if not room.participants:
-                    async with self._global_lock:
-                        del self.rooms[room_id]
-                        del self._locks[room_id]
+                    # 释放房间锁后再获取全局锁
+                    room_to_delete = room
+                    return room_to_delete
             return room
+
+    async def cleanup_empty_room(self, room_id: str) -> None:
+        """清理空房间，这个方法应该由调用方在 remove_participant 返回空房间后调用"""
+        async with self._global_lock:
+            if room_id in self.rooms:
+                del self.rooms[room_id]
+                if room_id in self._locks:
+                    del self._locks[room_id]
 
     async def add_transcript(self, room_id: str, user_id: str, text: str, is_final: bool = False) -> Optional[Room]:
         room_lock = await self._get_room_lock(room_id)

@@ -1,4 +1,10 @@
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from 'react'
 import { WebRTCManager } from '../../lib/webrtc/connection'
 import { WebSocketSignaling } from '../../lib/webrtc/signaling'
 import {
@@ -29,6 +35,25 @@ export const WebRTCProvider: React.FC<WebRTCProviderProps> = ({
   const [state, setState] = useState<WebRTCState>(initialState)
   const [signaling, setSignaling] = useState<WebSocketSignaling | null>(null)
   const [rtcManager, setRtcManager] = useState<WebRTCManager | null>(null)
+  const messageQueueRef = useRef<any[]>([])
+  const isProcessingRef = useRef(false)
+
+  // Process messages sequentially
+  const processMessageQueue = async () => {
+    if (isProcessingRef.current || messageQueueRef.current.length === 0) {
+      return
+    }
+
+    isProcessingRef.current = true
+    try {
+      while (messageQueueRef.current.length > 0) {
+        const message = messageQueueRef.current.shift()
+        await handleSignalingMessage(message)
+      }
+    } finally {
+      isProcessingRef.current = false
+    }
+  }
 
   // 连接到房间
   const connect = async (roomId: string, userId: string) => {
@@ -43,7 +68,10 @@ export const WebRTCProvider: React.FC<WebRTCProviderProps> = ({
         url: signalingUrl,
         roomId,
         userId,
-        onMessage: handleSignalingMessage,
+        onMessage: (message) => {
+          messageQueueRef.current.push(message)
+          processMessageQueue()
+        },
         onError: handleSignalingError,
         onClose: handleSignalingClose,
       }
