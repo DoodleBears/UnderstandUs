@@ -1,4 +1,5 @@
-import React from 'react'
+import { Button } from '@/components/ui/button'
+import React, { useEffect, useState } from 'react'
 import { useAudio } from './useAudio'
 
 export interface AudioControlProps {
@@ -25,6 +26,33 @@ export const AudioControl: React.FC<AudioControlProps> = ({
     setVolume,
   } = useAudio()
 
+  const [availableDevices, setAvailableDevices] = useState<MediaDeviceInfo[]>(
+    []
+  )
+
+  // 获取可用的音频输入设备
+  useEffect(() => {
+    const getDevices = async () => {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices()
+        const audioDevices = devices.filter(
+          (device) => device.kind === 'audioinput'
+        )
+        setAvailableDevices(audioDevices)
+      } catch (err) {
+        console.error('获取设备列表失败:', err)
+      }
+    }
+
+    // 监听设备变化
+    navigator.mediaDevices.addEventListener('devicechange', getDevices)
+    getDevices()
+
+    return () => {
+      navigator.mediaDevices.removeEventListener('devicechange', getDevices)
+    }
+  }, [])
+
   if (!isReady) {
     return <div className={className}>正在初始化音频系统...</div>
   }
@@ -33,12 +61,9 @@ export const AudioControl: React.FC<AudioControlProps> = ({
     return (
       <div className={className}>
         <div className="text-red-500">音频系统错误: {error.message}</div>
-        <button
-          onClick={() => requestPermissions()}
-          className="mt-2 rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600"
-        >
+        <Button onClick={() => requestPermissions()} variant="destructive">
           重试
-        </button>
+        </Button>
       </div>
     )
   }
@@ -47,12 +72,9 @@ export const AudioControl: React.FC<AudioControlProps> = ({
     return (
       <div className={className}>
         <div>需要麦克风权限</div>
-        <button
-          onClick={() => requestPermissions()}
-          className="mt-2 rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600"
-        >
+        <Button onClick={() => requestPermissions()} variant="default">
           授权访问麦克风
-        </button>
+        </Button>
       </div>
     )
   }
@@ -61,43 +83,40 @@ export const AudioControl: React.FC<AudioControlProps> = ({
     <div className={`flex flex-col gap-4 ${className}`}>
       {/* 麦克风控制 */}
       <div className="flex items-center gap-4">
-        <button
+        <Button
           onClick={() => toggleMicrophone()}
-          className={`rounded px-4 py-2 text-white ${
-            state.isEnabled
-              ? 'bg-green-500 hover:bg-green-600'
-              : 'bg-gray-500 hover:bg-gray-600'
-          }`}
+          variant={state.isEnabled ? 'default' : 'secondary'}
         >
           {state.isEnabled ? '麦克风开启' : '麦克风关闭'}
-        </button>
+        </Button>
 
         {state.isEnabled && (
-          <button
+          <Button
             onClick={() => toggleMute()}
-            className={`rounded px-4 py-2 text-white ${
-              state.isMuted
-                ? 'bg-red-500 hover:bg-red-600'
-                : 'bg-blue-500 hover:bg-blue-600'
-            }`}
+            variant={state.isMuted ? 'destructive' : 'default'}
           >
             {state.isMuted ? '取消静音' : '静音'}
-          </button>
+          </Button>
         )}
       </div>
 
       {/* 设备选择器 */}
-      {showDeviceSelector && devices.length > 0 && (
+      {showDeviceSelector && availableDevices.length > 0 && (
         <div className="flex items-center gap-2">
           <label className="text-sm">选择麦克风:</label>
           <select
             value={state.deviceId || ''}
-            onChange={(e) => switchDevice(e.target.value)}
+            onChange={(e) => {
+              const deviceId = e.target.value
+              if (deviceId) {
+                switchDevice(deviceId)
+              }
+            }}
             className="rounded border px-2 py-1"
           >
-            {devices.map((device) => (
+            {availableDevices.map((device) => (
               <option key={device.deviceId} value={device.deviceId}>
-                {device.label}
+                {device.label || `麦克风 ${device.deviceId.slice(0, 8)}...`}
               </option>
             ))}
           </select>
@@ -107,7 +126,7 @@ export const AudioControl: React.FC<AudioControlProps> = ({
       {/* 音量控制 */}
       {showVolumeControl && state.isEnabled && (
         <div className="flex items-center gap-2">
-          <label className="text-sm">音量:</label>
+          <label className="text-sm">输入音量:</label>
           <input
             type="range"
             min="0"

@@ -54,8 +54,8 @@ export class AudioCapture {
       // 设置音量
       this._gainNode.gain.value = this._volume
 
-      // 连接节点
-      this._sourceNode.connect(this._analyserNode).connect(this._gainNode)
+      // 连接节点 - 只用于分析，不连接到输出设备
+      this._sourceNode.connect(this._gainNode).connect(this._analyserNode)
 
       // 开始处理
       this._isProcessing = true
