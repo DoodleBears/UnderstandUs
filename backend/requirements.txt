@@ -2,6 +2,9 @@
 fastapi
 uvicorn
 
+# socketio
+python-socketio
+
 # 环境变量
 python-dotenv
 
