@@ -1,0 +1,9 @@
+---
+description: Best practices for WebRTC communication with aiortc
+globs: backend/**/*.py
+alwaysApply: false
+---
+- Implement proper error handling for WebRTC connections and streams
+- Use async/await for efficient handling of multiple WebRTC connections
+- Implement proper signaling mechanisms for establishing WebRTC connections
+- Consider using aiortc's built-in support for media processing and manipulation

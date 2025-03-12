@@ -1,0 +1,8 @@
+---
+description: Best practices for data validation and settings management with Pydantic
+globs: backend/**/*.py
+alwaysApply: false
+---
+- Use Pydantic models for request/response validation in APIs
+- Implement custom validators for complex validation logic
+- Use Pydantic's built-in serialization features for consistent data output

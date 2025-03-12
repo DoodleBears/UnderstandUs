@@ -1,0 +1,9 @@
+---
+description: Best practices for real-time communication with Socket.IO
+globs: backend/**/*.py
+alwaysApply: false
+---
+- Use namespaces to organize different types of real-time communication
+- Implement proper error handling for socket connections and events
+- Use rooms for efficient broadcasting to specific groups of clients
+- Consider using async handlers for better performance in high-traffic scenarios

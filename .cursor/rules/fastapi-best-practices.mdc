@@ -1,0 +1,9 @@
+---
+description: Best practices for building APIs with FastAPI
+globs: backend/**/*.py
+alwaysApply: false
+---
+- Use dependency injection for shared resources
+- Implement proper error handling with custom exception handlers
+- Utilize Pydantic models for request/response validation and serialization
+- Leverage async/await for improved performance in I/O-bound operations

@@ -1,0 +1,9 @@
+---
+description: TypeScript coding standards and type safety guidelines
+globs: frontend/**/*.{ts,tsx}
+alwaysApply: false
+---
+- Enable `strict` mode in tsconfig for maximum type safety
+- Use type aliases for complex types to improve readability
+- Implement generics for reusable components and functions
+- Utilize `satisfies` operator for runtime type checking

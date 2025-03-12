@@ -1,0 +1,9 @@
+---
+description: Best practices for React developmen
+globs: frontend/**/*.{ts,tsx,js,jsx}
+alwaysApply: false
+---
+- Use functional components with hooks instead of class components
+- Implement proper state management using `zustand`
+- Utilize memoization with `useMemo` and `useCallback` for performance optimization
+- Follow React's new concurrent rendering patterns
