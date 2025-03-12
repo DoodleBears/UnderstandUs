@@ -58,10 +58,24 @@ export const useAudio = () => {
   }, [context.actions])
 
   // 切换设备
-  const switchDevice = useCallback(
+  const setMicrophoneDevice = useCallback(
     async (deviceId: string) => {
       try {
-        await context.actions.setDevice(deviceId)
+        await context.actions.setMicrophoneDevice(deviceId)
+        setError(null)
+      } catch (err) {
+        setError(err as Error)
+        throw err
+      }
+    },
+    [context.actions]
+  )
+
+  // 设置扬声器
+  const setSpeakerDevice = useCallback(
+    async (deviceId: string) => {
+      try {
+        await context.actions.setSpeakerDevice(deviceId)
         setError(null)
       } catch (err) {
         setError(err as Error)
@@ -105,7 +119,8 @@ export const useAudio = () => {
     requestPermissions,
     toggleMicrophone,
     toggleMute,
-    switchDevice,
+    setMicrophoneDevice,
+    setSpeakerDevice,
     setVolume,
 
     // 原始上下文（用于高级用例）

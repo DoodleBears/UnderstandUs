@@ -22,23 +22,31 @@ export const AudioControl: React.FC<AudioControlProps> = ({
     requestPermissions,
     toggleMicrophone,
     toggleMute,
-    switchDevice,
+    setMicrophoneDevice,
+    setSpeakerDevice,
     setVolume,
   } = useAudio()
 
-  const [availableDevices, setAvailableDevices] = useState<MediaDeviceInfo[]>(
-    []
-  )
+  const [availableDevices, setAvailableDevices] = useState<{
+    audioInputs: MediaDeviceInfo[]
+    audioOutputs: MediaDeviceInfo[]
+  }>({
+    audioInputs: [],
+    audioOutputs: [],
+  })
 
-  // 获取可用的音频输入设备
+  // 获取可用的音频设备
   useEffect(() => {
     const getDevices = async () => {
       try {
         const devices = await navigator.mediaDevices.enumerateDevices()
-        const audioDevices = devices.filter(
+        const audioInputs = devices.filter(
           (device) => device.kind === 'audioinput'
         )
-        setAvailableDevices(audioDevices)
+        const audioOutputs = devices.filter(
+          (device) => device.kind === 'audiooutput'
+        )
+        setAvailableDevices({ audioInputs, audioOutputs })
       } catch (err) {
         console.error('获取设备列表失败:', err)
       }
@@ -101,25 +109,66 @@ export const AudioControl: React.FC<AudioControlProps> = ({
       </div>
 
       {/* 设备选择器 */}
-      {showDeviceSelector && availableDevices.length > 0 && (
-        <div className="flex items-center gap-2">
-          <label className="text-sm">选择麦克风:</label>
-          <select
-            value={state.deviceId || ''}
-            onChange={(e) => {
-              const deviceId = e.target.value
-              if (deviceId) {
-                switchDevice(deviceId)
-              }
-            }}
-            className="rounded border px-2 py-1"
-          >
-            {availableDevices.map((device) => (
-              <option key={device.deviceId} value={device.deviceId}>
-                {device.label || `麦克风 ${device.deviceId.slice(0, 8)}...`}
-              </option>
-            ))}
-          </select>
+      {showDeviceSelector && (
+        <div className="flex flex-col gap-2">
+          {availableDevices.audioInputs.length > 0 && (
+            <div className="flex items-center gap-2">
+              <label className="text-sm">选择麦克风:</label>
+              <select
+                value={state.deviceId || ''}
+                onChange={(e) => {
+                  const deviceId = e.target.value
+                  if (deviceId) {
+                    setMicrophoneDevice(deviceId)
+                  }
+                }}
+                className="rounded border px-2 py-1"
+              >
+                {availableDevices.audioInputs.map((device) => (
+                  <option key={device.deviceId} value={device.deviceId}>
+                    {device.label || `麦克风 ${device.deviceId.slice(0, 8)}...`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {availableDevices.audioOutputs.length > 0 && (
+            <div className="flex items-center gap-2">
+              <label className="text-sm">选择扬声器:</label>
+              <select
+                value={state.speakerDeviceId || ''}
+                onChange={(e) => {
+                  const deviceId = e.target.value
+                  if (deviceId) {
+                    setSpeakerDevice(deviceId).then(() => {
+                      if (
+                        typeof HTMLMediaElement.prototype.setSinkId ===
+                        'function'
+                      ) {
+                        // 设置音频输出设备
+                        const audioElements = document.querySelectorAll('audio')
+                        audioElements.forEach((audio) => {
+                          ;(audio as any)
+                            .setSinkId(deviceId)
+                            .catch((err: Error) => {
+                              console.error('切换扬声器失败:', err)
+                            })
+                        })
+                      }
+                    })
+                  }
+                }}
+                className="rounded border px-2 py-1"
+              >
+                {availableDevices.audioOutputs.map((device) => (
+                  <option key={device.deviceId} value={device.deviceId}>
+                    {device.label || `扬声器 ${device.deviceId.slice(0, 8)}...`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       )}
 

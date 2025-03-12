@@ -8,6 +8,7 @@ export interface AudioState {
   isEnabled: boolean
   isMuted: boolean
   deviceId: string | null
+  speakerDeviceId: string | null
   stream: MediaStream | null
   error: Error | null
   volume: number
@@ -30,7 +31,8 @@ export interface AudioContextValue {
     initialize: () => Promise<void>
     toggleMute: () => Promise<void>
     toggleEnable: () => Promise<void>
-    setDevice: (deviceId: string) => Promise<void>
+    setMicrophoneDevice: (deviceId: string) => Promise<void>
+    setSpeakerDevice: (deviceId: string) => Promise<void>
     setVolume: (volume: number) => void
     requestPermissions: () => Promise<void>
     cleanup: () => void

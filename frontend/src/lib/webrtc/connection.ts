@@ -51,6 +51,7 @@ export class WebRTCManager {
       config: this._options.configuration,
     })
     if (this._peers.has(peerId)) {
+      console.error(`与对等端 ${peerId} 的连接已存在`)
       throw new Error(`与对等端 ${peerId} 的连接已存在`)
     }
 

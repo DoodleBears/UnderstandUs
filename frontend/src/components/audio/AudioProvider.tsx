@@ -13,6 +13,7 @@ const initialAudioState: AudioState = {
   isEnabled: false,
   isMuted: false,
   deviceId: null,
+  speakerDeviceId: null,
   stream: null,
   error: null,
   volume: 1.0,
@@ -135,11 +136,14 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({
           await enableAudio(state.deviceId)
         }
       },
-      setDevice: async (deviceId: string) => {
+      setMicrophoneDevice: async (deviceId: string) => {
         if (state.isEnabled) {
           await disableAudio()
         }
         await enableAudio(deviceId)
+      },
+      setSpeakerDevice: async (deviceId: string) => {
+        setState((prev) => ({ ...prev, speakerDeviceId: deviceId }))
       },
       setVolume: (volume: number) => {
         audioCapture.setVolume(volume)

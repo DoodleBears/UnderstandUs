@@ -55,14 +55,6 @@ export class SocketIOSignaling implements SignalingConnection {
         this._socket.on('connect', () => {
           console.log('Socket.IO连接已建立，socket id:', this._socket?.id)
           this._state = 'connected'
-
-          // 发送加入房间消息
-          console.log('发送加入房间请求:', this._options.roomId)
-          this._socket?.emit('join_room', {
-            room_id: this._options.roomId,
-            user_id: this._options.userId,
-          })
-
           resolve()
         })
 

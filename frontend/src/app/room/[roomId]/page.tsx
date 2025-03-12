@@ -7,28 +7,11 @@ import { useAudio } from '@/components/audio/useAudio'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { useWebRTC, WebRTCProvider } from '@/components/webrtc/WebRTCProvider'
-import { useSocketIO } from '@/hooks/useSocketIO'
+import useRTCStore from '@/store/useRTCStore'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { Toaster } from 'react-hot-toast'
 import { v4 as uuidv4 } from 'uuid'
-
-interface Participant {
-  user_id: string
-  name: string
-  joined_at: string
-  is_host: boolean
-}
-
-interface Transcript {
-  type: 'transcript'
-  payload: {
-    text: string
-    user_id: string
-    timestamp: number
-  }
-}
 
 export default function RoomPage() {
   const [userId, setUserId] = useState('')
@@ -63,11 +46,7 @@ export default function RoomPage() {
 
   return (
     <AudioProvider>
-      <WebRTCProvider
-        signalingUrl={`${process.env.NEXT_PUBLIC_WS_URL}/socket.io`}
-      >
-        <RoomContent userId={userId} userName={userName} />
-      </WebRTCProvider>
+      <RoomContent userId={userId} userName={userName} />
     </AudioProvider>
   )
 }
@@ -81,109 +60,62 @@ function RoomContent({
 }) {
   const { roomId } = useParams()
   const router = useRouter()
-  const [participants, setParticipants] = useState<Participant[]>([])
-  const [transcripts, setTranscripts] = useState<Transcript[]>([])
   const [showDeleteModal, setShowDeleteModal] = useState(false)
 
   const audio = useAudio()
-  const webrtc = useWebRTC()
-
-  const handleSocketMessage = (message: any) => {
-    console.log('handleSocketMessage', message)
-    switch (message.type) {
-      case 'room_update':
-        setParticipants(message.payload.participants)
-        console.log('room_update', message)
-        break
-      case 'transcript':
-        setTranscripts((prev) => [...prev, message])
-        console.log('transcript', message)
-        break
-      case 'heartbeat_ack':
-        console.log('heartbeat_ack', message)
-        break
-    }
-  }
-
-  const { socket, isConnected, sendMessage } = useSocketIO(
-    roomId as string,
-    userId,
-    userName,
-    handleSocketMessage
-  )
+  const {
+    connect,
+    disconnect,
+    isConnected,
+    participants,
+    transcripts,
+    setLocalStream,
+  } = useRTCStore()
 
   // Handle page unload
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      // Only show confirmation dialog
       e.preventDefault()
-      e.returnValue = ''
     }
 
     const handleUnload = () => {
-      // User confirmed closing the page
       if (isConnected) {
-        sendMessage({ type: 'leave_room' })
+        disconnect()
       }
-      webrtc.actions.disconnect()
     }
 
     window.addEventListener('beforeunload', handleBeforeUnload)
     window.addEventListener('unload', handleUnload)
 
-    // Cleanup function - only remove event listeners
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload)
       window.removeEventListener('unload', handleUnload)
     }
-  }, [isConnected, webrtc.actions])
+  }, [isConnected, disconnect])
 
   // Handle component unmount
   useEffect(() => {
-    // Only add cleanup for actual unmount
     return () => {
       if (isConnected) {
-        sendMessage({ type: 'leave_room' })
-        webrtc.actions.disconnect()
+        disconnect()
       }
     }
-  }, []) // Empty dependency array ensures this only runs on unmount
+  }, [isConnected, disconnect])
 
-  // Send user info when connected
-  useEffect(() => {
-    if (isConnected) {
-      sendMessage({
-        type: 'user_info',
-        data: {
-          name: userName,
-        },
-      })
-    }
-  }, [isConnected, userName])
-
-  // Connect to WebRTC when audio is ready
+  // Connect to room when audio is ready
   useEffect(() => {
     if (audio.isReady && audio.state.stream && roomId) {
-      webrtc.actions.connect(roomId as string, userId)
-      webrtc.actions.setLocalStream(audio.state.stream)
+      connect(roomId as string, userId, userName)
+      setLocalStream(audio.state.stream)
     }
-  }, [audio.isReady, audio.state.stream, roomId])
-
-  // Add effect to log isConnected changes
-  useEffect(() => {
-    console.log('isConnected state changed:', isConnected)
-  }, [isConnected])
+  }, [audio.isReady, audio.state.stream, roomId, userId, userName])
 
   const leaveRoom = () => {
-    // Disconnect WebRTC
-    webrtc.actions.disconnect()
+    disconnect()
 
-    // 检查是否是最后一个用户
     if (participants.length === 1) {
       setShowDeleteModal(true)
     } else {
-      // 如果不是最后一个用户，直接离开
-      sendMessage({ type: 'leave_room' })
       router.push('/')
     }
   }
@@ -219,11 +151,14 @@ function RoomContent({
                 <div className="space-y-2">
                   {participants.map((participant) => (
                     <div
-                      key={participant.user_id}
+                      key={participant.id}
                       className="flex items-center justify-between rounded-lg border p-2"
                     >
-                      <span className="font-medium">{participant.name}</span>
-                      <AudioStatus />
+                      <div className="flex flex-col">
+                        <span className="font-medium">{participant.name}</span>
+                        <div className="my-2 border-b border-gray-500 dark:border-gray-300" />
+                        <span className="font-medium">{participant.id}</span>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -243,19 +178,16 @@ function RoomContent({
                     <div key={index} className="rounded-lg border p-4">
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">
-                          {new Date(
-                            transcript.payload.timestamp
-                          ).toLocaleTimeString()}
+                          {new Date(transcript.timestamp).toLocaleTimeString()}
                         </span>
                         <span className="font-medium">
                           {
-                            participants.find(
-                              (p) => p.user_id === transcript.payload.user_id
-                            )?.name
+                            participants.find((p) => p.id === transcript.userId)
+                              ?.name
                           }
                         </span>
                       </div>
-                      <p className="mt-2">{transcript.payload.text}</p>
+                      <p className="mt-2">{transcript.text}</p>
                     </div>
                   ))}
                 </div>
@@ -268,10 +200,8 @@ function RoomContent({
       {/* Bottom Audio Controls */}
       <div className="bg-background border-t px-4 py-3">
         <div className="flex items-center justify-center">
-          <AudioControl
-            showDeviceSelector={false}
-            className="flex-row items-center gap-4"
-          />
+          <AudioStatus />
+          <AudioControl className="flex-row items-center gap-4" />
         </div>
       </div>
 

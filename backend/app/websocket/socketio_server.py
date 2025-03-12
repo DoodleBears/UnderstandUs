@@ -114,7 +114,7 @@ async def join_room(sid, data):
     try:
         room_id = data.get('room_id')
         user_id = data.get('user_id')
-        user_name = data.get('user_name', f"参与者 {len(connection_store.active_connections.get(room_id, {}))}")
+        user_name = data.get('user_name')
         
         logger.warning(f"用户尝试加入房间: sid={sid}, room_id={room_id}, user_id={user_id}")
         
