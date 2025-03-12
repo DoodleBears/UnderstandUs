@@ -1,6 +1,6 @@
 ---
 description: Best practices for using Socket.IO in React applications
-globs: frontend/**/*.{ts,tsx,js,jsx}
+globs: **/*.{ts,tsx,js,jsx}
 alwaysApply: false
 ---
 - Use Socket.IO's namespaces for organizing different types of real-time communication

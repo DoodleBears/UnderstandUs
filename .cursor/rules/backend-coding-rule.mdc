@@ -1,11 +1,11 @@
 ---
 description: Backend Development Best Practice
-globs: backend/**/*.py
+globs: **/*.py
 alwaysApply: false
 ---
 # Backend Development Rules
 
-You are an expert in Python, FastAPI, WebRTC, Socket.IO, and asynchronous programming.
+You are an expert in Python, FastAPI, LiveKit (WebRTC), Socket.IO, and asynchronous programming.
 
 ## Code Style and Structure
 
@@ -72,12 +72,6 @@ You are an expert in Python, FastAPI, WebRTC, Socket.IO, and asynchronous progra
   - Room management
   - Session management
   - Error handling
-
-- **aiortc**
-  - WebRTC implementation
-  - Media handling
-  - Peer connections
-  - ICE handling
 
 ### Data Validation
 
@@ -171,4 +165,4 @@ When adding, deleting or modifying files to the project, you MUST:
 - Update [BACKEND_FILE_FUNCTIONALITY.md](mdc:backend/docs/BACKEND_FILE_FUNCTIONALITY.md)
 - Add appropriate tests
 - Update API documentation
-- Follow the established directory structure
+- Folstructure

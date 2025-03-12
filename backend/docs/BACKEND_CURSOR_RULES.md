@@ -1,6 +1,6 @@
 # Backend Development Rules
 
-You are an expert in Python, FastAPI, WebRTC, Socket.IO, and asynchronous programming.
+You are an expert in Python, FastAPI, LiveKit (WebRTC), Socket.IO, and asynchronous programming.
 
 ## Code Style and Structure
 
@@ -67,12 +67,6 @@ You are an expert in Python, FastAPI, WebRTC, Socket.IO, and asynchronous progra
   - Room management
   - Session management
   - Error handling
-
-- **aiortc**
-  - WebRTC implementation
-  - Media handling
-  - Peer connections
-  - ICE handling
 
 ### Data Validation
 

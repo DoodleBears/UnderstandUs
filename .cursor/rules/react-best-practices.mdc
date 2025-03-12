@@ -1,6 +1,6 @@
 ---
 description: Best practices for React developmen
-globs: frontend/**/*.{ts,tsx,js,jsx}
+globs: **/*.{ts,tsx,js,jsx}
 alwaysApply: false
 ---
 - Use functional components with hooks instead of class components

@@ -1,6 +1,6 @@
 ---
 description: Best practices for data validation and settings management with Pydantic
-globs: backend/**/*.py
+globs: **/*.py
 alwaysApply: false
 ---
 - Use Pydantic models for request/response validation in APIs

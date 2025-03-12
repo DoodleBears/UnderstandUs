@@ -1,6 +1,6 @@
 ---
 description: Best practices for real-time communication with Socket.IO
-globs: backend/**/*.py
+globs: **/*.py
 alwaysApply: false
 ---
 - Use namespaces to organize different types of real-time communication

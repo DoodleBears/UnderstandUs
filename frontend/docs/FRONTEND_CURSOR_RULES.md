@@ -34,19 +34,9 @@ You are an expert in TypeScript, Node.js, Next.js App Router, React, Shadcn UI, 
 - Use dynamic loading for non-critical components.
 - Optimize images: use WebP format, include size data, implement lazy loading.
 
-## Key Conventions
-
-- Follow Next.js docs for Data Fetching, Rendering, and Routing.
-
 ## Technical Stack
 
 ### Core Framework
-
-- **Next.js 15+**
-  - App Router for routing
-  - Server Components
-  - Client Components
-  - API Routes
 
 ### UI Layer
 
@@ -81,11 +71,6 @@ You are an expert in TypeScript, Node.js, Next.js App Router, React, Shadcn UI, 
 
 ### Real-time Communication
 
-- **WebRTC**
-  - Peer connections
-  - Media streams
-  - Data channels
-  - ICE handling
 - **Socket.IO Client**
   - Real-time events
   - Bi-directional communication

@@ -1,6 +1,6 @@
 ---
 description: Best practices for building APIs with FastAPI
-globs: backend/**/*.py
+globs: **/*.py
 alwaysApply: false
 ---
 - Use dependency injection for shared resources
