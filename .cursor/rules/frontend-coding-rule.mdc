@@ -111,6 +111,8 @@ You are an expert in TypeScript, Node.js, Next.js App Router, React, Shadcn UI, 
   - Fast installation
   - Disk space efficient
 
-## File Addition Guidelinesing new fil MUST
+## File Addition/Deletion or Modification Guidelines
 
-- Update [FILE_FUNCTIONALITY.md](mdc:frontend/docs/FILE_FUNCTIONALITY.md)
+When adding, deleting or modifying files to the project, you MUST:
+
+- Update [FRONTEND_FILE_FUNCTIONALITY.md](mdc:frontend/docs/FRONTEND_FILE_FUNCTIONALITY.md)
