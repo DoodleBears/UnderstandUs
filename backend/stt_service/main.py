@@ -16,30 +16,28 @@ from livekit.plugins.openai import stt as plugin
 
 load_dotenv(dotenv_path=".env")
 
-class RequestFilter(logging.Filter):
-    """Filter out verbose request details from logs."""
-    
-    def filter(self, record):
-        # Filter out logs from openai._base_client
-        if record.name == "openai._base_client":
-            return False
-        return True
-
-# Configure logger with filter
-logger = logging.getLogger("groq-whisper-stt-transcriber")
-logger.addFilter(RequestFilter())
+logger = logging.getLogger("[UnderstandUs][STT Service]")
 
 
 async def _forward_transcription(
-    stt_stream: stt.SpeechStream, stt_forwarder: transcription.STTSegmentsForwarder
+    stt_stream: stt.SpeechStream, 
+    stt_forwarder: transcription.STTSegmentsForwarder,
+    room: rtc.Room
 ):
-    """Forward the transcription to the client and log the transcript in the console"""
+    """Forward the transcription to the client and broadcast to all room members"""
     async for ev in stt_stream:
         if ev.type == stt.SpeechEventType.INTERIM_TRANSCRIPT:
             # you may not want to log interim transcripts, they are not final and may be incorrect
             logger.debug(f" -> {ev.alternatives[0].text}")
+      
         elif ev.type == stt.SpeechEventType.FINAL_TRANSCRIPT:
             logger.debug(f" ~> {ev.alternatives[0].text}")
+            # Broadcast final transcript
+            await room.local_participant.publish_data(
+                payload=ev.alternatives[0].text.encode(),
+                topic="transcription",
+                reliable=True
+            )
         elif ev.type == stt.SpeechEventType.RECOGNITION_USAGE:
             logger.debug(f"metrics: {ev.recognition_usage}")
 
@@ -48,9 +46,8 @@ async def _forward_transcription(
 
 async def entrypoint(ctx: JobContext):
     logger.info(f"starting transcriber (speech to text) example, room: {ctx.room.name}")
-    model = "whisper-large-v3-turbo"
-    stt_impl = plugin.STT.with_groq(model=model, detect_language=True)
-    stt_impl.update_options(language=None)
+    # uses "whisper-large-v3-turbo" model by default 
+    stt_impl = plugin.STT.with_groq()
 
     if not stt_impl.capabilities.streaming:
         # wrap with a stream adapter to use streaming semantics
@@ -68,7 +65,7 @@ async def entrypoint(ctx: JobContext):
         )
 
         stt_stream = stt_impl.stream()
-        asyncio.create_task(_forward_transcription(stt_stream, stt_forwarder))
+        asyncio.create_task(_forward_transcription(stt_stream, stt_forwarder, ctx.room))
 
         async for ev in audio_stream:
             stt_stream.push_frame(ev.frame)
