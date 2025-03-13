@@ -141,6 +141,7 @@ export default function Page() {
         serverUrl={LIVEKIT_URL}
         data-lk-theme="default"
         className="flex h-full flex-col"
+        connect={true}
       >
         <div className="flex-1 overflow-hidden" id="resizable-container">
           <div className="flex h-full">
@@ -157,7 +158,15 @@ export default function Page() {
           </div>
         </div>
         <div className="flex-none border-t">
-          <ControlBar className="bg-background" />
+          <ControlBar
+            className="bg-background"
+            variation="minimal"
+            controls={{
+              microphone: true,
+              camera: false,
+              screenShare: false,
+            }}
+          />
         </div>
       </LiveKitRoom>
     </div>
