@@ -6,6 +6,7 @@ import {
   LiveKitRoom,
   ParticipantTile,
   RoomAudioRenderer,
+  RoomName,
   useTracks,
 } from '@livekit/components-react'
 
@@ -17,9 +18,9 @@ import { useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
 // LiveKit 配置
-const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY
-const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET
-const LIVEKIT_URL = process.env.LIVEKIT_URL
+const LIVEKIT_API_KEY = process.env.NEXT_PUBLIC_LIVEKIT_API_KEY
+const LIVEKIT_API_SECRET = process.env.NEXT_PUBLIC_LIVEKIT_API_SECRET
+const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL
 
 // Backend URL
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL
@@ -101,25 +102,28 @@ export default function Page() {
   }
 
   return (
-    <LiveKitRoom
-      video={false}
-      audio={true}
-      token={token}
-      serverUrl={LIVEKIT_URL}
-      data-lk-theme="default"
-      style={{ height: '100dvh' }}
-    >
-      <MyVideoConference />
-      <RoomAudioRenderer />
-      <ControlBar />
-    </LiveKitRoom>
+    <div className="h-screen overflow-hidden">
+      <LiveKitRoom
+        video={false}
+        audio={true}
+        token={token}
+        serverUrl={LIVEKIT_URL}
+        data-lk-theme="default"
+        style={{ height: '100%' }}
+      >
+        <RoomName />
+        <MyVideoConference />
+        <RoomAudioRenderer />
+        <ControlBar />
+      </LiveKitRoom>
+    </div>
   )
 }
 
 function MyVideoConference() {
   const tracks = useTracks(
     [
-      { source: Track.Source.Camera, withPlaceholder: true },
+      { source: Track.Source.Camera, withPlaceholder: false },
       { source: Track.Source.ScreenShare, withPlaceholder: false },
     ],
     { onlySubscribed: false }
@@ -127,7 +131,7 @@ function MyVideoConference() {
   return (
     <GridLayout
       tracks={tracks}
-      style={{ height: 'calc(100vh - var(--lk-control-bar-height))' }}
+      style={{ height: 'calc(100% - var(--lk-control-bar-height))' }}
     >
       <ParticipantTile />
     </GridLayout>

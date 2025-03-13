@@ -9,6 +9,10 @@ down:
 
 reup:
 	docker compose down
+	docker compose up
+
+reup-d:
+	docker compose down
 	docker compose up -d
 
 reup-frontend:
