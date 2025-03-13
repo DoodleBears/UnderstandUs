@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import rooms
+from app.core.config import settings
 from app.websocket.ws_server import app as ws_app
 
 app = FastAPI(
@@ -14,7 +15,7 @@ app = FastAPI(
 # CORS middleware configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Update with production domain
+    allow_origins=settings.BACKEND_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -26,7 +27,7 @@ app.add_middleware(
 app.include_router(rooms.router, prefix="/api", tags=["rooms"])
 
 # Mount WebSocket application
-app.mount("/ws", ws_app)
+app.mount("/socket.io", ws_app)
 
 @app.get("/")
 async def root():
