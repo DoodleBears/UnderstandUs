@@ -1,21 +1,28 @@
+import socketio
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import rooms
-from app.core.config import settings
-from app.websocket.ws_server import app as ws_app
+# 创建 Socket.IO 服务器实例
+sio = socketio.AsyncServer(
+    async_mode='asgi',
+    cors_allowed_origins=[]  # 在生产环境中设置具体的源
+)
 
+# 创建 FastAPI 应用
 app = FastAPI(
     title="UnderstandUs",
     description="Real-time audio conversation analysis API",
     version="1.0.0"
 )
 
+# 创建 Socket.IO 应用
+socket_app = socketio.ASGIApp(sio, app)
+
 # CORS middleware configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.BACKEND_CORS_ORIGINS,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -23,11 +30,14 @@ app.add_middleware(
     max_age=3600,
 )
 
-# Register routes
-app.include_router(rooms.router, prefix="/api", tags=["rooms"])
+# Socket.IO 事件处理器
+@sio.event
+async def connect(sid, environ):
+    print(f"Client connected: {sid}")
 
-# Mount WebSocket application
-app.mount("/socket.io", ws_app)
+@sio.event
+async def disconnect(sid):
+    print(f"Client disconnected: {sid}")
 
 @app.get("/")
 async def root():
@@ -35,7 +45,7 @@ async def root():
 
 if __name__ == "__main__":
     uvicorn.run(
-        "app.main:app",
+        socket_app,  # 注意这里改成了 socket_app
         host="0.0.0.0",
         port=8000,
         reload=True,
