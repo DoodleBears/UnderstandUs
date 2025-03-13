@@ -16,6 +16,8 @@ from livekit.agents import (
 from livekit.plugins import silero
 from livekit.plugins.openai import stt as plugin
 
+from .transcript_service import transcript_service
+
 load_dotenv(dotenv_path=".env")
 
 logger = logging.getLogger("[UnderstandUs][STT Service]")
@@ -36,6 +38,14 @@ async def _forward_transcription(
       
         elif ev.type == stt.SpeechEventType.FINAL_TRANSCRIPT:
             logger.debug(f" ~> {ev.alternatives[0].text}")
+            # Store the transcript
+            transcript_service.add_transcript(
+                room_id=room.name,
+                text=ev.alternatives[0].text,
+                timestamp=current_time,
+                user_id=participant.identity
+            )
+            
             # Broadcast final transcript with user ID and timestamps
             payload = {
                 "text": ev.alternatives[0].text,
@@ -52,6 +62,26 @@ async def _forward_transcription(
             logger.debug(f"metrics: {ev.recognition_usage}")
 
         stt_forwarder.update(ev)
+
+
+async def _send_transcript_history(room: rtc.Room, participant: rtc.RemoteParticipant):
+    """Send transcript history to a new participant.
+    
+    Args:
+        room: The LiveKit room
+        participant: The new participant
+    """
+    transcripts = transcript_service.get_room_transcripts(room.name)
+    if transcripts:
+        history_payload = transcripts
+        
+        await room.local_participant.publish_data(
+            payload=json.dumps(history_payload).encode(),
+            topic="transcript_history",
+            destination_identities=[participant.identity],
+            reliable=True
+        )
+        logger.info(f"Sent {len(transcripts)} transcripts to participant {participant.identity}")
 
 
 async def entrypoint(ctx: JobContext):
@@ -81,15 +111,20 @@ async def entrypoint(ctx: JobContext):
         async for ev in audio_stream:
             stt_stream.push_frame(ev.frame)
 
-    @ctx.room.on("track_subscribed")
     def on_track_subscribed(
         track: rtc.Track,
         publication: rtc.TrackPublication,
         participant: rtc.RemoteParticipant,
     ):
-        # spin up a task to transcribe each track
+        """Handle track subscription by starting transcription and sending history."""
+        # Send transcript history first
+        asyncio.create_task(_send_transcript_history(ctx.room, participant))
+        
+        # Then start transcribing the track
         if track.kind == rtc.TrackKind.KIND_AUDIO:
             asyncio.create_task(transcribe_track(participant, track))
+            
+    ctx.room.on("track_subscribed", on_track_subscribed)
 
     await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
 

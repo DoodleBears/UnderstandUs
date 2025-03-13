@@ -13,6 +13,7 @@ interface TranscriptionMessage {
 export function TranscriptPanel() {
   const [transcripts, setTranscripts] = useState<TranscriptionMessage[]>([])
   const dataChannel = useDataChannel('transcription')
+  const historyTranscripts = useDataChannel('transcript_history')
 
   useEffect(() => {
     console.log('dataChannel', dataChannel)
@@ -32,6 +33,16 @@ export function TranscriptPanel() {
       setTranscripts((prev) => [...prev, newTranscript])
     }
   }, [dataChannel?.message])
+
+  useEffect(() => {
+    console.log('transcript_history', historyTranscripts)
+    if (historyTranscripts?.message) {
+      const historyTranscriptsMessage = JSON.parse(
+        new TextDecoder().decode(historyTranscripts.message.payload)
+      ) as TranscriptionMessage[]
+      setTranscripts((prev) => [...historyTranscriptsMessage, ...prev])
+    }
+  }, [historyTranscripts?.message])
 
   return (
     <div className="h-full p-4">
