@@ -46,7 +46,7 @@ function ParticipantCard({ trackRef }: { trackRef: any }) {
               <Mic className="h-4 w-4" />
             )}
           </div>
-          <AudioTrack trackRef={trackRef} volume={1} muted={false} />
+          <AudioTrack trackRef={trackRef} />
         </div>
       </div>
     </Card>

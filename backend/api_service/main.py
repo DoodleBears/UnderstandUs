@@ -1,11 +1,12 @@
 import logging
 
 import socketio
+import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .core.config import settings
-from .routers import token
+from .app.core.config import settings
+from .app.routers import token
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -48,4 +49,7 @@ async def disconnect(sid):
     logger.info(f"Client disconnected: {sid}")
 
 # Include routers
-app.include_router(token.router) 
+app.include_router(token.router)
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

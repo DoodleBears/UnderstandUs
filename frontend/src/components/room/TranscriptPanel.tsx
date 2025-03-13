@@ -21,7 +21,7 @@ export function TranscriptPanel() {
         new TextDecoder().decode(dataChannel.message.payload)
       ) as TranscriptionMessage
       const readableTimestamp = new Date(
-        transcriptionMessage.timestamp
+        transcriptionMessage.timestamp * 1000
       ).toLocaleTimeString()
       const newTranscript = {
         text: transcriptionMessage.text,
@@ -36,7 +36,7 @@ export function TranscriptPanel() {
   return (
     <div className="h-full p-4">
       <h3 className="mb-4 text-lg font-semibold">Transcript</h3>
-      <div className="max-h-[calc(100vh-200px)] space-y-4 overflow-y-auto">
+      <div className="max-h-[calc(100vh-200px)] space-y-2 overflow-y-auto">
         {transcripts.length > 0 ? (
           transcripts.map((transcript, index) => (
             <div
