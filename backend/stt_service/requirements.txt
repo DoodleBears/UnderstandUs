@@ -1,0 +1,6 @@
+livekit
+livekit-agents
+livekit-plugins-openai
+livekit-plugins-silero
+pydantic
+pydantic-settings

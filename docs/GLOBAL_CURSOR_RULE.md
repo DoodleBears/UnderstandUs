@@ -11,6 +11,7 @@ UnderstandUs is a real-time audio communication platform that enables multi-user
 - Live speech-to-text transcription
 - Shareable room links
 - Real-time participant management
+- Scalable STT processing
 
 ### Technical Stack
 
@@ -22,21 +23,70 @@ UnderstandUs is a real-time audio communication platform that enables multi-user
   - TypeScript for type safety
   - Shadcn UI and Tailwind CSS for styling
 
-- **Backend**: Python + FastAPI + python-socketio
-  - WebSocket server for signaling
-  - Room management system
-  - Speech-to-text processing
-  - User session handling
-  - RESTful API endpoints
+- **Backend**: Microservices Architecture
+
+  - **API Service**: FastAPI + Socket.IO
+    - Room management and user authentication
+    - LiveKit token generation
+    - Real-time transcription broadcasting
+    - WebSocket signaling server
+  - **STT Service**: LiveKit Agent
+
+    - Real-time audio transcription
+    - Multi-user audio processing
+    - Scalable agent deployment
+    - LiveKit room integration
+
+  - **Shared Components**
+    - Configuration management
+    - Common utilities
+    - Type definitions
+
+### System Architecture
+
+```mermaid
+graph LR
+    subgraph Frontend
+        A[User A] -->|WebRTC| Room
+        B[User B] -->|WebRTC| Room
+    end
+
+    subgraph LiveKit
+        Room[LiveKit Room]
+    end
+
+    subgraph Backend
+        STT[STT Agent] -->|Subscribe| Room
+        STT -->|Transcription| API[API Service]
+        API -->|WebSocket| A
+        API -->|WebSocket| B
+    end
+
+    style Frontend fill:#f9f,stroke:#333,stroke-width:2px
+    style LiveKit fill:#bbf,stroke:#333,stroke-width:2px
+    style Backend fill:#bfb,stroke:#333,stroke-width:2px
+```
 
 ### Communication Flow
 
-1. Users join rooms via shared links
-2. WebSocket connection established for signaling
-3. WebRTC peer connections created for audio
-4. Real-time audio streaming between participants
-5. Server processes audio for transcription
-6. Live transcripts broadcasted to room participants
+```mermaid
+sequenceDiagram
+    participant User as Frontend User
+    participant API as API Service
+    participant Room as LiveKit Room
+    participant STT as STT Agent
+
+    User->>API: Request room access
+    API->>API: Generate LiveKit token
+    API-->>User: Return token
+    User->>Room: Connect with token
+    STT->>Room: Join as agent
+    STT->>Room: Subscribe to audio
+    Room-->>STT: Audio stream
+    STT->>STT: Process audio
+    STT->>API: Send transcription
+    API->>User: Broadcast via WebSocket
+```
 
 ## Project Structure
 
@@ -48,13 +98,65 @@ UnderstandUs/
 │   ├── docs/               # Frontend documentation
 │   └── Dockerfile          # Frontend container configuration
 │
-├── backend/                 # FastAPI Backend Application
-│   ├── src/                # Source code
-│   ├── tests/              # Backend tests
-│   ├── docs/               # Backend documentation
-│   └── Dockerfile          # Backend container configuration
+├── backend/                 # Backend Services
+│   ├── api_service/        # API and WebSocket Service
+│   │   ├── app/           # API service source code
+│   │   ├── tests/         # API service tests
+│   │   └── Dockerfile     # API service container
+│   │
+│   ├── stt_service/       # Speech-to-Text Service
+│   │   ├── app/          # STT service source code
+│   │   ├── tests/        # STT service tests
+│   │   └── Dockerfile    # STT service container
+│   │
+│   └── shared/           # Shared Components
+│       ├── app/          # Shared source code
+│       └── tests/        # Shared tests
 │
-├── docker-compose.yml       # Container orchestration
-├── .env                     # Environment variables
-└── README.md               # Project documentation
+├── docker-compose.yml      # Container orchestration
+├── .env                    # Environment variables
+└── README.md              # Project documentation
 ```
+
+### Service Configuration
+
+- **API Service**
+
+  - Port: 8000
+  - WebSocket endpoint: ws://localhost:8000
+  - Environment variables:
+    - LIVEKIT_API_KEY
+    - LIVEKIT_API_SECRET
+    - ENVIRONMENT
+
+- **STT Service**
+  - Scalable deployment (multiple replicas)
+  - Environment variables:
+    - LIVEKIT_API_KEY
+    - LIVEKIT_API_SECRET
+    - ENVIRONMENT
+
+### Development Guidelines
+
+1. **Service Independence**
+
+   - Each service should be independently deployable
+   - Services communicate through LiveKit rooms
+   - Shared code should be minimal and well-documented
+
+2. **Error Handling**
+
+   - Implement proper error handling in each service
+   - Log errors with appropriate context
+   - Handle service disconnections gracefully
+
+3. **Testing**
+
+   - Unit tests for each service
+   - Integration tests for service interactions
+   - End-to-end tests for complete workflows
+
+4. **Monitoring**
+   - Log service health and performance
+   - Monitor transcription quality
+   - Track room and user statistics

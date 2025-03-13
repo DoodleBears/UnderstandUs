@@ -16,7 +16,18 @@ from livekit.plugins.openai import stt as plugin
 
 load_dotenv(dotenv_path=".env")
 
+class RequestFilter(logging.Filter):
+    """Filter out verbose request details from logs."""
+    
+    def filter(self, record):
+        # Filter out logs from openai._base_client
+        if record.name == "openai._base_client":
+            return False
+        return True
+
+# Configure logger with filter
 logger = logging.getLogger("groq-whisper-stt-transcriber")
+logger.addFilter(RequestFilter())
 
 
 async def _forward_transcription(
