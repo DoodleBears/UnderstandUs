@@ -23,36 +23,36 @@ export function RoomEntry() {
   return (
     <Card className="w-[400px]">
       <CardHeader className="text-center">
-        <CardTitle>加入房间</CardTitle>
+        <CardTitle>Enter Room</CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleJoinRoom} className="space-y-4">
           <div className="space-y-2">
             <label htmlFor="roomName" className="text-sm font-medium">
-              房间名称
+              Room ID
             </label>
             <Input
               id="roomName"
               value={roomName}
               onChange={(e) => setRoomName(e.target.value)}
-              placeholder="输入房间名称"
+              placeholder="Enter Room ID"
               required
             />
           </div>
           <div className="space-y-2">
             <label htmlFor="userName" className="text-sm font-medium">
-              用户名
+              User Name
             </label>
             <Input
               id="userName"
               value={userName}
               onChange={(e) => setUserName(e.target.value)}
-              placeholder="输入用户名"
+              placeholder="Enter User Name"
               required
             />
           </div>
           <Button type="submit" className="w-full">
-            加入房间
+            Join Room
           </Button>
         </form>
       </CardContent>

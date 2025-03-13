@@ -30,7 +30,7 @@ export default function Page() {
 
   useEffect(() => {
     if (!room || !username) {
-      setError('缺少房间名称或用户名')
+      setError('Missing room name or username')
       return
     }
 
@@ -53,14 +53,14 @@ export default function Page() {
         })
 
         if (!response.ok) {
-          throw new Error('获取token失败')
+          throw new Error('Failed to get token')
         }
 
         const data = await response.json()
         setToken(data.token)
       } catch (e) {
         console.error(e)
-        setError(e instanceof Error ? e.message : '连接失败')
+        setError(e instanceof Error ? e.message : 'Connection failed')
       }
     }
 
@@ -105,7 +105,7 @@ export default function Page() {
       <div className="bg-background flex min-h-screen items-center justify-center">
         <Card className="w-[400px]">
           <CardHeader>
-            <CardTitle>错误</CardTitle>
+            <CardTitle>Error</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-destructive">{error}</p>
@@ -120,11 +120,11 @@ export default function Page() {
       <div className="bg-background flex min-h-screen items-center justify-center">
         <Card className="w-[400px]">
           <CardHeader>
-            <CardTitle>正在连接...</CardTitle>
+            <CardTitle>Connecting...</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground">
-              正在获取房间访问权限，请稍候...
+              Getting room access, please wait...
             </p>
           </CardContent>
         </Card>

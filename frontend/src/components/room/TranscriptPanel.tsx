@@ -35,12 +35,24 @@ export function TranscriptPanel() {
   }, [dataChannel?.message])
 
   useEffect(() => {
-    console.log('transcript_history', historyTranscripts)
+    console.log('transcript_history')
+    console.log(historyTranscripts)
     if (historyTranscripts?.message) {
       const historyTranscriptsMessage = JSON.parse(
         new TextDecoder().decode(historyTranscripts.message.payload)
       ) as TranscriptionMessage[]
-      setTranscripts((prev) => [...historyTranscriptsMessage, ...prev])
+      const newTranscripts: TranscriptionMessage[] = []
+      for (const transcript of historyTranscriptsMessage) {
+        const readableTimestamp = new Date(
+          transcript.timestamp * 1000
+        ).toLocaleTimeString()
+        const newTranscript = {
+          ...transcript,
+          readableTimestamp: readableTimestamp,
+        }
+        newTranscripts.push(newTranscript)
+      }
+      setTranscripts((prev) => [...newTranscripts, ...prev])
     }
   }, [historyTranscripts?.message])
 

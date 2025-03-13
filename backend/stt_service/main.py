@@ -53,11 +53,26 @@ async def _forward_transcription(
                 "user_id": participant.identity,
             }
             logger.debug(f"payload: {payload}")
-            await room.local_participant.publish_data(
-                payload=json.dumps(payload).encode(),
-                topic="transcription",
-                reliable=True
-            )
+            
+            # Add retry mechanism for publishing transcription
+            max_retries = 3
+            retry_delay = 1  # shorter delay for real-time messages
+            
+            for attempt in range(max_retries):
+                try:
+                    await room.local_participant.publish_data(
+                        payload=json.dumps(payload).encode(),
+                        topic="transcription",
+                        reliable=True
+                    )
+                    logger.info(f"Successfully published transcription to {participant.identity}")
+                    break  # Success, exit the retry loop
+                except Exception as e:
+                    logger.error(f"Failed to publish transcription (attempt {attempt + 1}/{max_retries}): {str(e)}")
+                    if attempt < max_retries - 1:  # Don't sleep on the last attempt
+                        await asyncio.sleep(retry_delay)
+                    continue
+                    
         elif ev.type == stt.SpeechEventType.RECOGNITION_USAGE:
             logger.debug(f"metrics: {ev.recognition_usage}")
 
@@ -72,16 +87,38 @@ async def _send_transcript_history(room: rtc.Room, participant: rtc.RemotePartic
         participant: The new participant
     """
     transcripts = transcript_service.get_room_transcripts(room.name)
-    if transcripts:
-        history_payload = transcripts
-        
-        await room.local_participant.publish_data(
-            payload=json.dumps(history_payload).encode(),
-            topic="transcript_history",
-            destination_identities=[participant.identity],
-            reliable=True
-        )
-        logger.info(f"Sent {len(transcripts)} transcripts to participant {participant.identity}")
+    if not transcripts:
+        return
+
+    max_retries = 3
+    retry_delay = 1  # seconds
+    
+    for attempt in range(max_retries):
+        try:
+            # Wait for a short time to ensure data channel is ready
+            await asyncio.sleep(retry_delay)
+            
+            history_payload = transcripts
+            
+            logger.info(f"Attempting to send history to {participant.identity} (attempt {attempt + 1}/{max_retries})")
+            
+            await room.local_participant.publish_data(
+                payload=json.dumps(history_payload).encode(),
+                topic="transcript_history",  # Use the same topic as regular transcripts
+                destination_identities=[participant.identity],
+                reliable=True
+            )
+            
+            logger.info(f"Successfully sent {len(transcripts)} transcripts to participant {participant.identity}")
+            return  # Success, exit the function
+            
+        except Exception as e:
+            logger.error(f"Failed to send history to {participant.identity} (attempt {attempt + 1}/{max_retries}): {str(e)}")
+            if attempt < max_retries - 1:  # Don't sleep on the last attempt
+                await asyncio.sleep(retry_delay)
+            continue
+    
+    logger.error(f"Failed to send history to {participant.identity} after {max_retries} attempts")
 
 
 async def entrypoint(ctx: JobContext):
@@ -118,16 +155,60 @@ async def entrypoint(ctx: JobContext):
     ):
         """Handle track subscription by starting transcription and sending history."""
         # Send transcript history first
-        asyncio.create_task(_send_transcript_history(ctx.room, participant))
         
         # Then start transcribing the track
         if track.kind == rtc.TrackKind.KIND_AUDIO:
             asyncio.create_task(transcribe_track(participant, track))
+
+    def on_track_published(publication: rtc.TrackPublication, participant: rtc.RemoteParticipant):
+        """Handle track publication by starting transcription and sending history."""
+        # Send transcript history first
+        
+        # Then start transcribing the track
+        asyncio.create_task(_send_transcript_history(ctx.room, participant))
+
+    ctx.room.on("track_published", on_track_published)
+
+    def on_participant_disconnected(participant: rtc.RemoteParticipant):
+        """Handle participant disconnection and cleanup room if empty."""
+        logger.info(f"Participant {participant.identity} disconnected from room {ctx.room.name}")
+        
+        # Get the number of participants excluding the agent (STT service)
+        len_of_remote_participants = len(ctx.room.remote_participants)
+        
+        if len_of_remote_participants == 0:
+            logger.info(f"No more participants in room {ctx.room.name}, cleaning up...")
+            # Clear room transcripts
+            transcript_service.clear_room_transcripts(ctx.room.name)
+            # Disconnect from the room
+            asyncio.create_task(ctx.room.disconnect())
+            # Exit the agent
+            exit(0) 
+    
             
     ctx.room.on("track_subscribed", on_track_subscribed)
+    ctx.room.on("participant_disconnected", on_participant_disconnected)
 
     await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
 
 
 if __name__ == "__main__":
-    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint))
+    # Set up the event loop policy to use the default event loop
+    asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
+    
+    # Create and set the event loop
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    try:
+        # Run the application with the event loop
+        cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint))
+    finally:
+        # Clean up the event loop
+        loop.close()
+    try:
+        # Run the application with the event loop
+        cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint))
+    finally:
+        # Clean up the event loop
+        loop.close()
