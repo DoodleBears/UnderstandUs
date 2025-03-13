@@ -1,5 +1,7 @@
 import asyncio
+import json
 import logging
+import time
 
 from dotenv import load_dotenv
 from livekit import rtc
@@ -22,19 +24,27 @@ logger = logging.getLogger("[UnderstandUs][STT Service]")
 async def _forward_transcription(
     stt_stream: stt.SpeechStream, 
     stt_forwarder: transcription.STTSegmentsForwarder,
-    room: rtc.Room
+    room: rtc.Room,
+    participant: rtc.RemoteParticipant
 ):
     """Forward the transcription to the client and broadcast to all room members"""
     async for ev in stt_stream:
+        current_time = time.time()
         if ev.type == stt.SpeechEventType.INTERIM_TRANSCRIPT:
             # you may not want to log interim transcripts, they are not final and may be incorrect
             logger.debug(f" -> {ev.alternatives[0].text}")
       
         elif ev.type == stt.SpeechEventType.FINAL_TRANSCRIPT:
             logger.debug(f" ~> {ev.alternatives[0].text}")
-            # Broadcast final transcript
+            # Broadcast final transcript with user ID and timestamps
+            payload = {
+                "text": ev.alternatives[0].text,
+                "timestamp": current_time,
+                "user_id": participant.identity,
+            }
+            logger.debug(f"payload: {payload}")
             await room.local_participant.publish_data(
-                payload=ev.alternatives[0].text.encode(),
+                payload=json.dumps(payload).encode(),
                 topic="transcription",
                 reliable=True
             )
@@ -47,14 +57,15 @@ async def _forward_transcription(
 async def entrypoint(ctx: JobContext):
     logger.info(f"starting transcriber (speech to text) example, room: {ctx.room.name}")
     # uses "whisper-large-v3-turbo" model by default 
-    stt_impl = plugin.STT.with_groq()
+    model = "whisper-large-v3-turbo"
+    stt_impl = plugin.STT.with_groq(model=model, detect_language=True)
 
     if not stt_impl.capabilities.streaming:
         # wrap with a stream adapter to use streaming semantics
         stt_impl = stt.StreamAdapter(
             stt=stt_impl,
             vad=silero.VAD.load(
-                min_silence_duration=0.2,
+                min_silence_duration=1,
             ),
         )
 
@@ -65,7 +76,7 @@ async def entrypoint(ctx: JobContext):
         )
 
         stt_stream = stt_impl.stream()
-        asyncio.create_task(_forward_transcription(stt_stream, stt_forwarder, ctx.room))
+        asyncio.create_task(_forward_transcription(stt_stream, stt_forwarder, ctx.room, participant))
 
         async for ev in audio_stream:
             stt_stream.push_frame(ev.frame)

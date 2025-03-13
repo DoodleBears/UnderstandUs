@@ -1,19 +1,13 @@
 'use client'
 
 import { useDataChannel } from '@livekit/components-react'
-import { DataPacket_Kind } from 'livekit-client'
 import { useEffect, useState } from 'react'
 
 interface TranscriptionMessage {
   text: string
   timestamp: number
-}
-
-interface DataMessage {
-  payload: Uint8Array
-  kind: DataPacket_Kind
-  topic: string
-  timestamp: number
+  user_id: string
+  readableTimestamp: string
 }
 
 export function TranscriptPanel() {
@@ -23,9 +17,17 @@ export function TranscriptPanel() {
   useEffect(() => {
     console.log('dataChannel', dataChannel)
     if (dataChannel?.message) {
+      const transcriptionMessage = JSON.parse(
+        new TextDecoder().decode(dataChannel.message.payload)
+      ) as TranscriptionMessage
+      const readableTimestamp = new Date(
+        transcriptionMessage.timestamp
+      ).toLocaleTimeString()
       const newTranscript = {
-        text: new TextDecoder().decode(dataChannel.message.payload),
-        timestamp: dataChannel.message.timestamp || Date.now(),
+        text: transcriptionMessage.text,
+        timestamp: transcriptionMessage.timestamp,
+        user_id: transcriptionMessage.user_id,
+        readableTimestamp: readableTimestamp,
       }
       setTranscripts((prev) => [...prev, newTranscript])
     }
@@ -37,11 +39,21 @@ export function TranscriptPanel() {
       <div className="max-h-[calc(100vh-200px)] space-y-4 overflow-y-auto">
         {transcripts.length > 0 ? (
           transcripts.map((transcript, index) => (
-            <div key={index} className="bg-muted rounded-lg p-2">
-              <p className="text-sm">{transcript.text}</p>
-              <span className="text-muted-foreground text-xs">
-                {new Date(transcript.timestamp).toLocaleTimeString()}
+            <div
+              key={index}
+              className="bg-muted flex flex-col gap-1 rounded-lg p-2"
+            >
+              <span className="text-foreground text-xs">
+                <span className="text-foreground text-sm font-bold">
+                  {transcript.user_id}
+                </span>
+                <span className="text-muted-foreground text-xs">
+                  {' '}
+                  {transcript.readableTimestamp}
+                </span>
               </span>
+
+              <span className="text-foreground text-sm">{transcript.text}</span>
             </div>
           ))
         ) : (
