@@ -1,19 +1,13 @@
 'use client'
 
-import {
-  ControlBar,
-  GridLayout,
-  LiveKitRoom,
-  ParticipantTile,
-  RoomAudioRenderer,
-  RoomName,
-  useTracks,
-} from '@livekit/components-react'
+import { ControlBar, LiveKitRoom } from '@livekit/components-react'
 
 import '@livekit/components-styles'
 
+import { ParticipantList } from '@/components/room/ParticipantList'
+import { ResizablePanel } from '@/components/room/ResizablePanel'
+import { TranscriptPanel } from '@/components/room/TranscriptPanel'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Track } from 'livekit-client'
 import { useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
@@ -31,6 +25,8 @@ export default function Page() {
   const username = searchParams.get('username')
   const [token, setToken] = useState('')
   const [error, setError] = useState('')
+  const [leftWidth, setLeftWidth] = useState(30) // percentage
+  const [isDragging, setIsDragging] = useState(false)
 
   useEffect(() => {
     if (!room || !username) {
@@ -71,15 +67,48 @@ export default function Page() {
     generateToken()
   }, [room, username])
 
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true)
+    e.preventDefault()
+  }
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!isDragging) return
+
+    const container = document.getElementById('resizable-container')
+    if (!container) return
+
+    const containerRect = container.getBoundingClientRect()
+    const newWidth =
+      ((e.clientX - containerRect.left) / containerRect.width) * 100
+    setLeftWidth(Math.min(Math.max(newWidth, 20), 80)) // Limit between 20% and 80%
+  }
+
+  const handleMouseUp = () => {
+    setIsDragging(false)
+  }
+
+  useEffect(() => {
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove)
+      window.addEventListener('mouseup', handleMouseUp)
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isDragging])
+
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="bg-background flex min-h-screen items-center justify-center">
         <Card className="w-[400px]">
           <CardHeader>
             <CardTitle>错误</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-red-500">{error}</p>
+            <p className="text-destructive">{error}</p>
           </CardContent>
         </Card>
       </div>
@@ -88,13 +117,15 @@ export default function Page() {
 
   if (token === '') {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="bg-background flex min-h-screen items-center justify-center">
         <Card className="w-[400px]">
           <CardHeader>
             <CardTitle>正在连接...</CardTitle>
           </CardHeader>
           <CardContent>
-            <p>正在获取房间访问权限，请稍候...</p>
+            <p className="text-muted-foreground">
+              正在获取房间访问权限，请稍候...
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -102,38 +133,33 @@ export default function Page() {
   }
 
   return (
-    <div className="h-screen overflow-hidden">
+    <div className="bg-background h-screen overflow-hidden">
       <LiveKitRoom
         video={false}
         audio={true}
         token={token}
         serverUrl={LIVEKIT_URL}
         data-lk-theme="default"
-        style={{ height: '100%' }}
+        className="flex h-full flex-col"
       >
-        <RoomName />
-        <MyVideoConference />
-        <RoomAudioRenderer />
-        <ControlBar />
+        <div className="flex-1 overflow-hidden" id="resizable-container">
+          <div className="flex h-full">
+            <ResizablePanel style={{ width: `${leftWidth}%` }}>
+              <ParticipantList />
+            </ResizablePanel>
+            <div
+              className="bg-border hover:bg-primary/50 w-1 cursor-col-resize transition-colors"
+              onMouseDown={handleMouseDown}
+            />
+            <ResizablePanel style={{ width: `${100 - leftWidth}%` }}>
+              <TranscriptPanel />
+            </ResizablePanel>
+          </div>
+        </div>
+        <div className="flex-none border-t">
+          <ControlBar className="bg-background" />
+        </div>
       </LiveKitRoom>
     </div>
-  )
-}
-
-function MyVideoConference() {
-  const tracks = useTracks(
-    [
-      { source: Track.Source.Camera, withPlaceholder: false },
-      { source: Track.Source.ScreenShare, withPlaceholder: false },
-    ],
-    { onlySubscribed: false }
-  )
-  return (
-    <GridLayout
-      tracks={tracks}
-      style={{ height: 'calc(100% - var(--lk-control-bar-height))' }}
-    >
-      <ParticipantTile />
-    </GridLayout>
   )
 }
